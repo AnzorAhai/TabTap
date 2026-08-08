@@ -1,0 +1,112 @@
+:root {
+  color-scheme: light;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+body {
+  margin: 0;
+  background: #f5f5f7;
+}
+
+.screen {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+}
+
+h1 {
+  font-size: 22px;
+}
+
+section {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 20px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.tables-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.table-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid #eee;
+  border-radius: 10px;
+  width: 180px;
+  text-align: center;
+}
+
+.qr-placeholder {
+  width: 120px;
+  height: 120px;
+  background: #f0f0f0;
+  border-radius: 8px;
+}
+
+.table-label {
+  font-weight: 600;
+}
+
+.table-card a {
+  font-size: 12px;
+  color: #555;
+  word-break: break-all;
+}
+
+.status-active {
+  color: #1a7f37;
+  font-size: 12px;
+}
+
+.status-inactive {
+  color: #999;
+  font-size: 12px;
+}
+
+.payments-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.payments-table th,
+.payments-table td {
+  text-align: left;
+  padding: 8px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.payment-status {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-succeeded {
+  background: #e6f4ea;
+  color: #1a7f37;
+}
+
+.status-pending {
+  background: #fff4e5;
+  color: #b26a00;
+}
+
+.status-failed {
+  background: #fdecea;
+  color: #c0392b;
+}
+
+.status-refunded {
+  background: #eee;
+  color: #666;
+}

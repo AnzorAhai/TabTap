@@ -82,3 +82,22 @@ input[type="number"] {
   color: #1a7f37;
   font-weight: 600;
 }
+
+.participant-block {
+  border-bottom: 1px solid #f0f0f0;
+  padding: 4px 0;
+}
+
+.participant-block .participant {
+  border-bottom: none;
+}
+
+.receipt {
+  font-size: 13px;
+  color: #555;
+  padding-bottom: 8px;
+}
+
+.done .receipt {
+  padding-top: 8px;
+}

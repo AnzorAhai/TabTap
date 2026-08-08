@@ -15,4 +15,9 @@ export class PaymentsController {
   get(@Param("paymentId") paymentId: string) {
     return this.paymentsService.getPayment(paymentId);
   }
+
+  @Get(":paymentId/receipt")
+  getReceipt(@Param("paymentId") paymentId: string) {
+    return this.paymentsService.getReceipt(paymentId);
+  }
 }

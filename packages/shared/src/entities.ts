@@ -109,6 +109,21 @@ export interface Receipt {
   deliveredAt?: string;
 }
 
+// Composed, guest-facing view of a receipt — not a fiscal document, just a
+// payment confirmation (fiscal requirements vary per country and are handled
+// separately, see plan section on Fiscalization).
+export interface ReceiptView {
+  receiptId: string;
+  paymentId: string;
+  tenantName: string;
+  venueName: string;
+  participantLabel?: string;
+  amountMinor: number;
+  tipMinor: number;
+  currency: Currency;
+  paidAt: string;
+}
+
 export interface POSConnectorConfig {
   tenantId: string;
   venueId: string;
@@ -122,4 +137,24 @@ export interface PaymentProviderConfig {
   type: string;
   credentialsRef: string;
   supportedCurrencies: Currency[];
+}
+
+export interface AdminTableView {
+  id: string;
+  label: string;
+  qrToken: string;
+  isActive: boolean;
+  guestUrl: string;
+}
+
+export interface AdminPaymentView {
+  id: string;
+  billId: string;
+  tableLabel: string;
+  participantLabel?: string;
+  amountMinor: number;
+  tipMinor: number;
+  currency: Currency;
+  status: PaymentStatus;
+  createdAt: string;
 }

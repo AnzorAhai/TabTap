@@ -1,4 +1,4 @@
-import type { Bill, Payment, Split } from "@tabtap/shared";
+import type { Bill, Payment, ReceiptView, Split } from "@tabtap/shared";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
@@ -40,4 +40,8 @@ export function createPayment(input: {
     method: "POST",
     body: JSON.stringify(input),
   });
+}
+
+export function getReceipt(paymentId: string): Promise<ReceiptView> {
+  return request(`/payments/${paymentId}/receipt`);
 }

@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import type { Bill, PaymentStatus, Split, SplitParticipant } from "@tabtap/shared";
-import { createPayment, createSplit, getBillForTable, getSplit } from "./api";
+import type { Bill, PaymentStatus, ReceiptView, Split, SplitParticipant } from "@tabtap/shared";
+import { createPayment, createSplit, getBillForTable, getReceipt, getSplit } from "./api";
 
 function formatMoney(minor: number, currency: string): string {
   return `${(minor / 100).toFixed(2)} ${currency}`;
+}
+
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" });
 }
 
 function getTableIdFromUrl(): string {
@@ -19,6 +23,7 @@ export default function App() {
   const [split, setSplit] = useState<Split | null>(null);
   const [participantsCount, setParticipantsCount] = useState(1);
   const [paymentState, setPaymentState] = useState<PaymentState>({});
+  const [receipts, setReceipts] = useState<Record<string, ReceiptView>>({});
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -53,6 +58,12 @@ export default function App() {
       });
       const status: PaymentStatus = payment.status;
       setPaymentState((s) => ({ ...s, [participant.id]: status === "succeeded" ? "paid" : "error" }));
+
+      if (status === "succeeded") {
+        const receipt = await getReceipt(payment.id);
+        setReceipts((r) => ({ ...r, [participant.id]: receipt }));
+      }
+
       const refreshed = await getSplit(split.id);
       setSplit(refreshed);
     } catch (e: any) {
@@ -112,16 +123,25 @@ export default function App() {
             const remaining = p.amountDueMinor - p.amountPaidMinor;
             const state = paymentState[p.id] ?? "idle";
             const isPaid = remaining <= 0;
+            const receipt = receipts[p.id];
             return (
-              <div key={p.id} className="participant">
-                <span>{p.label}</span>
-                <span>{formatMoney(p.amountDueMinor, bill.currency)}</span>
-                {isPaid ? (
-                  <span className="paid-badge">Оплачено</span>
-                ) : (
-                  <button disabled={state === "paying"} onClick={() => handlePay(p)}>
-                    {state === "paying" ? "Оплачиваем…" : "Оплатить"}
-                  </button>
+              <div key={p.id} className="participant-block">
+                <div className="participant">
+                  <span>{p.label}</span>
+                  <span>{formatMoney(p.amountDueMinor, bill.currency)}</span>
+                  {isPaid ? (
+                    <span className="paid-badge">Оплачено</span>
+                  ) : (
+                    <button disabled={state === "paying"} onClick={() => handlePay(p)}>
+                      {state === "paying" ? "Оплачиваем…" : "Оплатить"}
+                    </button>
+                  )}
+                </div>
+                {receipt && (
+                  <div className="receipt">
+                    Чек · {receipt.tenantName}, {receipt.venueName} ·{" "}
+                    {formatMoney(receipt.amountMinor + receipt.tipMinor, receipt.currency)} · {formatTime(receipt.paidAt)}
+                  </div>
                 )}
               </div>
             );
@@ -132,6 +152,12 @@ export default function App() {
       {split && allPaid && (
         <section className="done">
           <h2>Счёт полностью оплачен. Спасибо!</h2>
+          {Object.values(receipts).map((receipt) => (
+            <div key={receipt.receiptId} className="receipt">
+              Чек · {receipt.tenantName}, {receipt.venueName} ·{" "}
+              {formatMoney(receipt.amountMinor + receipt.tipMinor, receipt.currency)} · {formatTime(receipt.paidAt)}
+            </div>
+          ))}
         </section>
       )}
     </main>

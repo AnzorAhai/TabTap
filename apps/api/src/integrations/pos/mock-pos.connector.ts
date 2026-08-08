@@ -46,7 +46,7 @@ export class MockPOSConnector implements POSConnector {
   }
 
   async getBillDetails(billExternalRef: string): Promise<Bill> {
-    const bill = [...this.bills.values()].find((b) => b.id === billExternalRef);
+    const bill = [...this.bills.values()].find((b) => b.externalPosId === billExternalRef);
     if (!bill) {
       throw new Error(`Bill ${billExternalRef} not found`);
     }
@@ -54,7 +54,7 @@ export class MockPOSConnector implements POSConnector {
   }
 
   async markPaid(billExternalRef: string, payment: MarkPaidInput): Promise<void> {
-    const bill = [...this.bills.values()].find((b) => b.id === billExternalRef);
+    const bill = [...this.bills.values()].find((b) => b.externalPosId === billExternalRef);
     if (!bill) {
       throw new Error(`Bill ${billExternalRef} not found`);
     }
