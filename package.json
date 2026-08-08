@@ -10,6 +10,7 @@
     "packages/*"
   ],
   "scripts": {
+    "postinstall": "npm run build --workspace=packages/shared",
     "dev:api": "npm run start:dev --workspace=apps/api",
     "dev:guest": "npm run dev --workspace=apps/guest-pwa",
     "dev:admin": "npm run dev --workspace=apps/admin",
