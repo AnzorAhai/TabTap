@@ -38,6 +38,46 @@ export class MockPOSConnector implements POSConnector {
         lastSyncedAt: new Date().toISOString(),
       },
     ],
+    [
+      "table-2",
+      {
+        id: "bill-2",
+        tenantId: "demo-tenant",
+        venueId: "demo-venue",
+        tableId: "table-2",
+        externalPosId: "mock-pos-bill-2",
+        currency: "EUR",
+        items: [
+          { id: "item-4", name: "Ribeye Steak 300g", quantity: 2, unitPriceMinor: 2900, taxMinor: 290, discountMinor: 0 },
+          { id: "item-5", name: "Truffle Fries", quantity: 1, unitPriceMinor: 700, taxMinor: 70, discountMinor: 0 },
+          { id: "item-6", name: "House Red Wine, glass", quantity: 2, unitPriceMinor: 600, taxMinor: 60, discountMinor: 0 },
+        ],
+        totalMinor: 2 * 2900 + 700 + 2 * 600 + 290 * 2 + 70 + 60 * 2,
+        paidMinor: 0,
+        status: BillStatus.OPEN,
+        lastSyncedAt: new Date().toISOString(),
+      },
+    ],
+    [
+      "table-3",
+      {
+        id: "bill-3",
+        tenantId: "demo-tenant",
+        venueId: "demo-venue",
+        tableId: "table-3",
+        externalPosId: "mock-pos-bill-3",
+        currency: "EUR",
+        items: [
+          { id: "item-7", name: "Beef Burger", quantity: 3, unitPriceMinor: 1400, taxMinor: 140, discountMinor: 0 },
+          { id: "item-8", name: "Onion Rings", quantity: 1, unitPriceMinor: 550, taxMinor: 55, discountMinor: 0 },
+          { id: "item-9", name: "Craft Cola", quantity: 3, unitPriceMinor: 400, taxMinor: 40, discountMinor: 0 },
+        ],
+        totalMinor: 3 * 1400 + 550 + 3 * 400 + 140 * 3 + 55 + 40 * 3,
+        paidMinor: 0,
+        status: BillStatus.OPEN,
+        lastSyncedAt: new Date().toISOString(),
+      },
+    ],
   ]);
 
   async getOpenBill(tableExternalRef: string): Promise<Bill | null> {

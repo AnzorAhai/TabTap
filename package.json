@@ -15,6 +15,7 @@
     "dev:guest": "npm run dev --workspace=apps/guest-pwa",
     "dev:admin": "npm run dev --workspace=apps/admin",
     "build": "npm run build --workspaces --if-present",
-    "db:migrate": "node --env-file=apps/api/.env db/migrate.mjs"
+    "db:migrate": "node --env-file=apps/api/.env db/migrate.mjs",
+    "db:reset-demo": "node --env-file=apps/api/.env db/reset-test-data.mjs"
   }
 }
