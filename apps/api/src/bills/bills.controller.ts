@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post } from "@nestjs/common";
 import { BillsService } from "./bills.service";
 import { CreateSplitDto } from "./dto/create-split.dto";
+import { PayItemsDto } from "./dto/pay-items.dto";
 
 @Controller()
 export class BillsController {
@@ -24,5 +25,15 @@ export class BillsController {
   @Get("splits/:splitId")
   getSplit(@Param("splitId") splitId: string) {
     return this.billsService.getSplit(splitId);
+  }
+
+  @Get("bills/:billId/items-split")
+  async getItemsSplit(@Param("billId") billId: string) {
+    return (await this.billsService.getItemsSplit(billId)) ?? { participants: [] };
+  }
+
+  @Post("bills/:billId/items-split")
+  payForItems(@Param("billId") billId: string, @Body() dto: PayItemsDto) {
+    return this.billsService.payForItems(billId, dto.itemIds);
   }
 }

@@ -29,12 +29,24 @@ export function getSplit(splitId: string): Promise<Split> {
   return request(`/splits/${splitId}`);
 }
 
+export function getItemsSplit(billId: string): Promise<Split> {
+  return request(`/bills/${billId}/items-split`);
+}
+
+export function payForItems(billId: string, itemIds: string[]): Promise<{ split: Split; participantId: string }> {
+  return request(`/bills/${billId}/items-split`, {
+    method: "POST",
+    body: JSON.stringify({ itemIds }),
+  });
+}
+
 export function createPayment(input: {
   billId: string;
   splitId: string;
   participantId: string;
   amountMinor: number;
   currency: string;
+  tipMinor?: number;
 }): Promise<Payment> {
   return request(`/payments`, {
     method: "POST",

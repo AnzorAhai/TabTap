@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { Bill, Split } from "@tabtap/shared";
 import { POS_CONNECTOR, POSConnector } from "../integrations/pos/pos-connector.interface";
 import { TablesRepository } from "../tables/tables.repository";
@@ -50,5 +50,22 @@ export class BillsService {
   async markParticipantPaid(splitId: string, participantId: string, amountMinor: number): Promise<Split> {
     await this.splitsRepository.addParticipantPayment(splitId, participantId, amountMinor);
     return this.splitsRepository.findById(splitId);
+  }
+
+  async getItemsSplit(billId: string): Promise<Split | null> {
+    return this.splitsRepository.findByItemsSplitForBill(billId);
+  }
+
+  async payForItems(billId: string, itemIds: string[]): Promise<{ split: Split; participantId: string }> {
+    const bill = await this.billsRepository.findById(billId);
+    const selected = bill.items.filter((item) => itemIds.includes(item.id));
+    if (selected.length !== itemIds.length) {
+      throw new BadRequestException("One or more selected items do not belong to this bill");
+    }
+    const amountDueMinor = selected.reduce(
+      (sum, item) => sum + item.unitPriceMinor * item.quantity + item.taxMinor - item.discountMinor,
+      0,
+    );
+    return this.splitsRepository.addItemsParticipant(bill.tenantId, billId, itemIds, amountDueMinor);
   }
 }
