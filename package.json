@@ -1,0 +1,14 @@
+{
+  "name": "tabtap",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run start:dev --workspace=apps/api",
+    "dev:guest": "npm run dev --workspace=apps/guest-pwa",
+    "build": "npm run build --workspaces --if-present"
+  }
+}

@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: tabtap
+      POSTGRES_PASSWORD: tabtap
+      POSTGRES_DB: tabtap
+    ports:
+      - "5432:5432"
+    volumes:
+      - tabtap_postgres_data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+volumes:
+  tabtap_postgres_data:
