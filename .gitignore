@@ -10,3 +10,4 @@ coverage/
 .vite/
 *.tsbuildinfo
 .claude/settings.local.json
+.local/
