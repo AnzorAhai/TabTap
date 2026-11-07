@@ -1,0 +1,1 @@
+D:/TabTap/node_modules/@embedded-postgres/windows-x64/native/bin/postgres.exe "-D" "D:\TabTap\.local\postgres" "-p" "5433"

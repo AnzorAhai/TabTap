@@ -5,9 +5,10 @@ services:
     name: tabtap-api
     runtime: node
     plan: free
-    # US East is the closest Render region to Venezuela. A region can only be
-    # chosen when a service is created — see README.md for moving an existing one.
-    region: virginia
+    # Region of the existing service. Render can't change a service's region, so
+    # moving to US East (closer to Venezuela) means creating a new service — see
+    # README.md "Region". Don't edit this for the existing service.
+    region: oregon
     # --include=dev: NODE_ENV=production would otherwise skip the build tooling.
     # Node version comes from .nvmrc.
     buildCommand: npm ci --include=dev && npm run build --workspace=apps/api

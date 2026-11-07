@@ -92,11 +92,13 @@ One Vercel project per app, both from this repository:
 ### Region
 
 Guests are in Venezuela, so the API and the database should both run in US East: Render region
-`virginia`, Supabase region `us-east-1`. Render and Supabase both fix the region when a
-service/project is created, so moving means creating new ones:
+`virginia`, Supabase region `us-east-1`. Today they run in `oregon` (Render) and `eu-west-1`
+(Supabase). Both fix the region when a service/project is created, so moving means creating new
+ones:
 
 1. Create a Supabase project in `us-east-1`, copy its connection string.
-2. Create the Render service from the Blueprint (region `virginia`), set the variables above with
-   the new `DATABASE_URL`. Migrations and demo data are applied on its first start.
+2. Set `region: virginia` in `render.yaml` and create a new Blueprint instance from it in Render,
+   with the variables above and the new `DATABASE_URL`. Migrations and demo data are applied on
+   its first start.
 3. Point `VITE_API_URL` of both Vercel projects at the new API URL and redeploy them.
-4. Delete the old Render service and Supabase project.
+4. Delete the old Blueprint, Render service and Supabase project.
