@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: tabtap
+          POSTGRES_PASSWORD: tabtap
+          POSTGRES_DB: tabtap
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tabtap"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://tabtap:tabtap@localhost:5432/tabtap
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Format
+        run: npm run format:check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # Applies every migration to an empty database, then re-runs to make sure
+      # an already-migrated database is left untouched (what each deploy does).
+      - name: Migrations apply cleanly
+        run: |
+          node db/migrate.mjs
+          node db/migrate.mjs | grep -q "Migrations up to date."

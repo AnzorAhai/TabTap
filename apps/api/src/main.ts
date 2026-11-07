@@ -1,16 +1,34 @@
 import "reflect-metadata";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { ConsoleLogger, Logger } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
-import { ValidationPipe } from "@nestjs/common";
+import type { NestExpressApplication } from "@nestjs/platform-express";
 import { AppModule } from "./app.module";
+import { configureApp } from "./app.setup";
+import { APP_CONFIG, AppConfig, ConfigError } from "./config/app-config";
 
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  app.enableCors();
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-  const port = process.env.PORT ? Number(process.env.PORT) : 3000;
-  await app.listen(port);
-  // eslint-disable-next-line no-console
-  console.log(`TabTap API listening on http://localhost:${port}`);
+// Local development reads apps/api/.env; on a server the platform provides real
+// environment variables, which always win over values from the file.
+const envFile = path.join(__dirname, "..", ".env");
+if (existsSync(envFile)) {
+  process.loadEnvFile(envFile);
 }
 
-bootstrap();
+async function bootstrap(): Promise<void> {
+  const isProduction = process.env.NODE_ENV === "production";
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    // JSON lines in production so the hosting platform's log search can filter by field.
+    logger: new ConsoleLogger({ json: isProduction, colors: !isProduction }),
+  });
+  const config = app.get<AppConfig>(APP_CONFIG);
+  configureApp(app, config);
+  await app.listen(config.port, "0.0.0.0");
+  Logger.log(`TabTap API listening on port ${config.port} (${config.nodeEnv})`, "Bootstrap");
+}
+
+bootstrap().catch((err: unknown) => {
+  // Logger may not be set up yet (e.g. invalid configuration), so write straight to stderr.
+  console.error(err instanceof ConfigError ? err.message : err);
+  process.exit(1);
+});

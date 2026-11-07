@@ -1,10 +1,36 @@
-import { Module } from "@nestjs/common";
-import { DatabaseModule } from "./database/database.module";
-import { BillsModule } from "./bills/bills.module";
-import { PaymentsModule } from "./payments/payments.module";
+import { MiddlewareConsumer, Module, NestModule } from "@nestjs/common";
+import { APP_FILTER, APP_GUARD } from "@nestjs/core";
+import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { AdminModule } from "./admin/admin.module";
+import { BillsModule } from "./bills/bills.module";
+import { AllExceptionsFilter } from "./common/all-exceptions.filter";
+import { RequestLoggerMiddleware } from "./common/request-logger.middleware";
+import { APP_CONFIG, AppConfig } from "./config/app-config";
+import { ConfigModule } from "./config/config.module";
+import { DatabaseModule } from "./database/database.module";
+import { HealthController } from "./health/health.controller";
+import { PaymentsModule } from "./payments/payments.module";
 
 @Module({
-  imports: [DatabaseModule, BillsModule, PaymentsModule, AdminModule],
+  imports: [
+    ConfigModule,
+    DatabaseModule,
+    ThrottlerModule.forRootAsync({
+      inject: [APP_CONFIG],
+      useFactory: (config: AppConfig) => [{ name: "default", ttl: 60_000, limit: config.rateLimitPerMinute }],
+    }),
+    BillsModule,
+    PaymentsModule,
+    AdminModule,
+  ],
+  controllers: [HealthController],
+  providers: [
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_FILTER, useClass: AllExceptionsFilter },
+  ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(RequestLoggerMiddleware).exclude("health").forRoutes("*");
+  }
+}

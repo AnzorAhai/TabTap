@@ -49,7 +49,7 @@ export default function App() {
         setTables(t);
         setPayments(p);
       })
-      .catch((e) => setError(String(e.message ?? e)))
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false));
   }, []);
 
@@ -101,9 +101,7 @@ export default function App() {
                 <td>{formatMoney(payment.amountMinor, payment.currency)}</td>
                 <td>{payment.tipMinor > 0 ? formatMoney(payment.tipMinor, payment.currency) : "—"}</td>
                 <td>
-                  <span className={`payment-status status-${payment.status}`}>
-                    {STATUS_LABEL[payment.status]}
-                  </span>
+                  <span className={`payment-status status-${payment.status}`}>{STATUS_LABEL[payment.status]}</span>
                 </td>
               </tr>
             ))}

@@ -1,16 +1,32 @@
+# Render Blueprint for the API. Frontends (guest app, admin panel) deploy on
+# Vercel — see README.md "Deploy".
 services:
   - type: web
     name: tabtap-api
     runtime: node
     plan: free
-    buildCommand: npm install && npm run build --workspace=packages/shared && npm run build --workspace=apps/api
-    startCommand: node apps/api/dist/main.js
+    # Region of the existing service. Render can't change a service's region, so
+    # moving to US East (closer to Venezuela) means creating a new service — see
+    # README.md "Region". Don't edit this for the existing service.
+    region: oregon
+    # --include=dev: NODE_ENV=production would otherwise skip the build tooling.
+    # Node version comes from .nvmrc.
+    buildCommand: npm ci --include=dev && npm run build --workspace=apps/api
+    # Migrations run before every start; already-applied files are skipped.
+    startCommand: node db/migrate.mjs && node apps/api/dist/main.js
+    healthCheckPath: /health
     envVars:
+      - key: NODE_ENV
+        value: production
       - key: DATABASE_URL
+        sync: false
+      # Comma-separated frontend origins, e.g. https://tabtap-guest.vercel.app,https://tabtap-admin.vercel.app
+      - key: CORS_ORIGINS
+        sync: false
+      # Guest app base URL, used for the table QR links shown in the admin panel.
+      - key: GUEST_APP_URL
         sync: false
       - key: POS_CONNECTOR_TYPE
         value: mock
       - key: PAYMENT_PROVIDER_TYPE
         value: mock
-      - key: GUEST_APP_URL
-        sync: false

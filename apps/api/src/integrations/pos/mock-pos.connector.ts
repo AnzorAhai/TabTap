@@ -1,10 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { Bill, BillStatus } from "@tabtap/shared";
-import {
-  MarkPaidInput,
-  POSConnector,
-  POSConnectorCapabilities,
-} from "./pos-connector.interface";
+import { MarkPaidInput, POSConnector, POSConnectorCapabilities } from "./pos-connector.interface";
 
 // In-memory POS with a couple of seeded demo bills, keyed by table id.
 // Lets the guest app and QA exercise the full flow before any real POS is connected.
@@ -28,7 +24,14 @@ export class MockPOSConnector implements POSConnector {
         externalPosId: "mock-pos-bill-1",
         currency: "EUR",
         items: [
-          { id: "item-1", name: "Margherita Pizza", quantity: 1, unitPriceMinor: 1200, taxMinor: 120, discountMinor: 0 },
+          {
+            id: "item-1",
+            name: "Margherita Pizza",
+            quantity: 1,
+            unitPriceMinor: 1200,
+            taxMinor: 120,
+            discountMinor: 0,
+          },
           { id: "item-2", name: "Caesar Salad", quantity: 1, unitPriceMinor: 900, taxMinor: 90, discountMinor: 0 },
           { id: "item-3", name: "Sparkling Water", quantity: 2, unitPriceMinor: 350, taxMinor: 70, discountMinor: 0 },
         ],
@@ -48,9 +51,23 @@ export class MockPOSConnector implements POSConnector {
         externalPosId: "mock-pos-bill-2",
         currency: "EUR",
         items: [
-          { id: "item-4", name: "Ribeye Steak 300g", quantity: 2, unitPriceMinor: 2900, taxMinor: 290, discountMinor: 0 },
+          {
+            id: "item-4",
+            name: "Ribeye Steak 300g",
+            quantity: 2,
+            unitPriceMinor: 2900,
+            taxMinor: 290,
+            discountMinor: 0,
+          },
           { id: "item-5", name: "Truffle Fries", quantity: 1, unitPriceMinor: 700, taxMinor: 70, discountMinor: 0 },
-          { id: "item-6", name: "House Red Wine, glass", quantity: 2, unitPriceMinor: 600, taxMinor: 60, discountMinor: 0 },
+          {
+            id: "item-6",
+            name: "House Red Wine, glass",
+            quantity: 2,
+            unitPriceMinor: 600,
+            taxMinor: 60,
+            discountMinor: 0,
+          },
         ],
         totalMinor: 2 * 2900 + 700 + 2 * 600 + 290 * 2 + 70 + 60 * 2,
         paidMinor: 0,

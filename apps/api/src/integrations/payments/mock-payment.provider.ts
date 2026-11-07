@@ -14,7 +14,7 @@ export class MockPaymentProvider implements PaymentProvider {
   readonly type = "mock";
   private counter = 0;
 
-  async createPaymentIntent(input: CreatePaymentIntentInput): Promise<PaymentIntentResult> {
+  async createPaymentIntent(_input: CreatePaymentIntentInput): Promise<PaymentIntentResult> {
     this.counter += 1;
     return {
       providerRef: `mock-pi-${this.counter}`,

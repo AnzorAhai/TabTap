@@ -3,19 +3,33 @@
   "private": true,
   "version": "0.1.0",
   "engines": {
-    "node": ">=20"
+    "node": ">=22.12"
   },
   "workspaces": [
-    "apps/*",
-    "packages/*"
+    "packages/*",
+    "apps/*"
   ],
   "scripts": {
     "postinstall": "npm run build --workspace=packages/shared",
     "dev:api": "npm run start:dev --workspace=apps/api",
     "dev:guest": "npm run dev --workspace=apps/guest-pwa",
     "dev:admin": "npm run dev --workspace=apps/admin",
-    "build": "npm run build --workspaces --if-present",
-    "db:migrate": "node --env-file=apps/api/.env db/migrate.mjs",
-    "db:reset-demo": "node --env-file=apps/api/.env db/reset-test-data.mjs"
+    "build": "npm run build --workspace=packages/shared && npm run build --workspace=apps/api --workspace=apps/guest-pwa --workspace=apps/admin",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "npm run test --workspaces --if-present",
+    "db:migrate": "node --env-file-if-exists=apps/api/.env db/migrate.mjs",
+    "db:reset-demo": "node --env-file-if-exists=apps/api/.env db/reset-test-data.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.14.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.14.0",
+    "prettier": "^3.9.10",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.1"
   }
 }

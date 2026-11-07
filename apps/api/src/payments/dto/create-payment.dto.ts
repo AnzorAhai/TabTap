@@ -1,15 +1,15 @@
-import { IsInt, IsOptional, IsPositive, IsString, Min } from "class-validator";
+import { IsInt, IsOptional, IsPositive, IsString, IsUUID, Length, Min } from "class-validator";
 
 export class CreatePaymentDto {
-  @IsString()
+  @IsUUID()
   billId!: string;
 
   @IsOptional()
-  @IsString()
+  @IsUUID()
   splitId?: string;
 
   @IsOptional()
-  @IsString()
+  @IsUUID()
   participantId?: string;
 
   @IsInt()
@@ -17,6 +17,7 @@ export class CreatePaymentDto {
   amountMinor!: number;
 
   @IsString()
+  @Length(3, 3)
   currency!: string;
 
   @IsOptional()
