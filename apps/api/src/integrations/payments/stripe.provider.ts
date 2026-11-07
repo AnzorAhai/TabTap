@@ -1,4 +1,3 @@
-import { Injectable } from "@nestjs/common";
 import Stripe from "stripe";
 import { PaymentStatus } from "@tabtap/shared";
 import {
@@ -17,19 +16,17 @@ const STRIPE_TO_PAYMENT_STATUS: Record<string, PaymentStatus> = {
   canceled: PaymentStatus.FAILED,
 };
 
-@Injectable()
 export class StripeProvider implements PaymentProvider {
   readonly type = "stripe";
   private readonly stripe: Stripe;
   private readonly webhookSecret?: string;
 
-  constructor() {
-    const secretKey = process.env.STRIPE_SECRET_KEY;
-    if (!secretKey) {
+  constructor(options: { secretKey?: string; webhookSecret?: string }) {
+    if (!options.secretKey) {
       throw new Error("STRIPE_SECRET_KEY is not set — cannot initialize StripeProvider");
     }
-    this.stripe = new Stripe(secretKey);
-    this.webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    this.stripe = new Stripe(options.secretKey);
+    this.webhookSecret = options.webhookSecret;
   }
 
   async createPaymentIntent(input: CreatePaymentIntentInput): Promise<PaymentIntentResult> {
@@ -57,13 +54,9 @@ export class StripeProvider implements PaymentProvider {
     if (!this.webhookSecret || !signature) {
       throw new Error("Stripe webhook secret or signature missing");
     }
-    const event = this.stripe.webhooks.constructEvent(
-      payload as string | Buffer,
-      signature,
-      this.webhookSecret,
-    );
+    const event = this.stripe.webhooks.constructEvent(payload as string | Buffer, signature, this.webhookSecret);
     if (event.type === "payment_intent.succeeded" || event.type === "payment_intent.payment_failed") {
-      const intent = event.data.object as Stripe.PaymentIntent;
+      const intent = event.data.object;
       return {
         providerRef: intent.id,
         status: STRIPE_TO_PAYMENT_STATUS[intent.status] ?? PaymentStatus.PENDING,

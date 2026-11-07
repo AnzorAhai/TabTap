@@ -19,6 +19,8 @@ async function main() {
     await client.query("UPDATE bills SET paid_minor = 0, status = 'open'");
     await client.query("COMMIT");
     console.log("Test data cleared, bills reset to open/unpaid.");
+    // The mock POS keeps its bills in API process memory and would re-sync them as paid.
+    console.log("Restart the API as well so the mock POS starts from unpaid bills again.");
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;

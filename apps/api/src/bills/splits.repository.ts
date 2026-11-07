@@ -84,10 +84,10 @@ export class SplitsRepository {
   // One shared by_items split per bill — every guest who pays for specific dishes
   // becomes another participant on it, so everyone sees which items are already claimed.
   async findByItemsSplitForBill(billId: string): Promise<Split | null> {
-    const { rows } = await this.pool.query(
-      `SELECT id FROM splits WHERE bill_id = $1 AND type = $2 LIMIT 1`,
-      [billId, SplitType.BY_ITEMS],
-    );
+    const { rows } = await this.pool.query(`SELECT id FROM splits WHERE bill_id = $1 AND type = $2 LIMIT 1`, [
+      billId,
+      SplitType.BY_ITEMS,
+    ]);
     if (rows.length === 0) {
       return null;
     }
@@ -106,10 +106,10 @@ export class SplitsRepository {
     try {
       await client.query("BEGIN");
 
-      const existing = await client.query(
-        `SELECT id FROM splits WHERE bill_id = $1 AND type = $2 FOR UPDATE`,
-        [billId, SplitType.BY_ITEMS],
-      );
+      const existing = await client.query(`SELECT id FROM splits WHERE bill_id = $1 AND type = $2 FOR UPDATE`, [
+        billId,
+        SplitType.BY_ITEMS,
+      ]);
       if (existing.rows.length > 0) {
         splitId = existing.rows[0].id;
       } else {

@@ -1,22 +1,40 @@
-import { Global, Module } from "@nestjs/common";
+import { Global, Inject, Injectable, Logger, Module, OnApplicationShutdown } from "@nestjs/common";
 import { Pool } from "pg";
+import { APP_CONFIG, AppConfig } from "../config/app-config";
 
 export const DB_POOL = Symbol("DB_POOL");
 
+const logger = new Logger("Database");
+
 const poolProvider = {
   provide: DB_POOL,
-  useFactory: () => {
-    const connectionString = process.env.DATABASE_URL;
-    if (!connectionString) {
-      throw new Error("DATABASE_URL is not set — see apps/api/.env.example");
-    }
-    return new Pool({ connectionString });
+  inject: [APP_CONFIG],
+  useFactory: (config: AppConfig) => {
+    const pool = new Pool({
+      connectionString: config.databaseUrl,
+      max: 10,
+      idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 10_000,
+    });
+    // Without a listener, an error on an idle client (e.g. the server closing
+    // the connection) is emitted as an unhandled 'error' event and crashes the process.
+    pool.on("error", (err) => logger.error(`Idle database client error: ${err.message}`, err.stack));
+    return pool;
   },
 };
 
+@Injectable()
+class DatabaseShutdown implements OnApplicationShutdown {
+  constructor(@Inject(DB_POOL) private readonly pool: Pool) {}
+
+  async onApplicationShutdown(): Promise<void> {
+    await this.pool.end();
+  }
+}
+
 @Global()
 @Module({
-  providers: [poolProvider],
+  providers: [poolProvider, DatabaseShutdown],
   exports: [DB_POOL],
 })
 export class DatabaseModule {}

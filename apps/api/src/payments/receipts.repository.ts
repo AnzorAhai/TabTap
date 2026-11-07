@@ -8,10 +8,7 @@ export class ReceiptsRepository {
   constructor(@Inject(DB_POOL) private readonly pool: Pool) {}
 
   async createForPayment(paymentId: string, tenantId: string): Promise<void> {
-    await this.pool.query(
-      `INSERT INTO receipts (tenant_id, payment_id) VALUES ($1, $2)`,
-      [tenantId, paymentId],
-    );
+    await this.pool.query(`INSERT INTO receipts (tenant_id, payment_id) VALUES ($1, $2)`, [tenantId, paymentId]);
   }
 
   // Not a fiscal document — just enough to show the guest what they paid for.

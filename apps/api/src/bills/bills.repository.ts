@@ -1,8 +1,22 @@
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { Pool } from "pg";
-import { Bill, BillStatus } from "@tabtap/shared";
+import { Bill, BillItem, BillStatus } from "@tabtap/shared";
 import { DB_POOL } from "../database/database.module";
 import { TableRow } from "../tables/tables.repository";
+
+interface BillDbRow {
+  id: string;
+  tenant_id: string;
+  venue_id: string;
+  table_id: string;
+  external_pos_id: string;
+  currency: string;
+  items: BillItem[];
+  total_minor: string; // BIGINT arrives as a string from pg
+  paid_minor: string;
+  status: string;
+  last_synced_at: Date;
+}
 
 @Injectable()
 export class BillsRepository {
@@ -12,10 +26,10 @@ export class BillsRepository {
   // snapshot, keyed by (table, external_pos_id), so splits/payments have a stable FK to point at.
   async upsertFromPosSnapshot(posBill: Bill, table: Pick<TableRow, "id" | "tenantId" | "venueId">): Promise<Bill> {
     const itemsJson = JSON.stringify(posBill.items);
-    const existing = await this.pool.query(
-      `SELECT id FROM bills WHERE external_pos_id = $1 AND table_id = $2`,
-      [posBill.externalPosId, table.id],
-    );
+    const existing = await this.pool.query(`SELECT id FROM bills WHERE external_pos_id = $1 AND table_id = $2`, [
+      posBill.externalPosId,
+      table.id,
+    ]);
 
     if (existing.rows.length > 0) {
       const id = existing.rows[0].id;
@@ -46,14 +60,14 @@ export class BillsRepository {
   }
 
   async findById(billId: string): Promise<Bill> {
-    const { rows } = await this.pool.query(`SELECT * FROM bills WHERE id = $1`, [billId]);
+    const { rows } = await this.pool.query<BillDbRow>(`SELECT * FROM bills WHERE id = $1`, [billId]);
     if (rows.length === 0) {
       throw new NotFoundException(`Bill ${billId} not found`);
     }
     return this.mapRow(rows[0]);
   }
 
-  private mapRow(row: Record<string, any>): Bill {
+  private mapRow(row: BillDbRow): Bill {
     return {
       id: row.id,
       tenantId: row.tenant_id,

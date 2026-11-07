@@ -1,14 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Bill, PaymentStatus, ReceiptView, Split, SplitParticipant } from "@tabtap/shared";
-import {
-  createPayment,
-  createSplit,
-  getBillForTable,
-  getItemsSplit,
-  getReceipt,
-  getSplit,
-  payForItems,
-} from "./api";
+import { createPayment, createSplit, getBillForTable, getItemsSplit, getReceipt, getSplit, payForItems } from "./api";
 
 const TIP_OPTIONS = [0, 5, 10, 15];
 
@@ -18,6 +10,10 @@ function formatMoney(minor: number, currency: string): string {
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" });
+}
+
+function errorMessage(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
 }
 
 function getTableIdFromUrl(): string {
@@ -59,9 +55,7 @@ function TipPicker({
         </button>
       ))}
       {percent > 0 && (
-        <span className="tip-amount">
-          +{formatMoney(Math.round((baseAmountMinor * percent) / 100), currency)}
-        </span>
+        <span className="tip-amount">+{formatMoney(Math.round((baseAmountMinor * percent) / 100), currency)}</span>
       )}
     </div>
   );
@@ -70,7 +64,7 @@ function TipPicker({
 type PaymentState = Record<string, "idle" | "paying" | "paid" | "error">;
 
 export default function App() {
-  const tableId = useMemo(getTableIdFromUrl, []);
+  const tableId = useMemo(() => getTableIdFromUrl(), []);
   const [bill, setBill] = useState<Bill | null>(null);
   const [mode, setMode] = useState<"items" | "equal">("items");
   const [error, setError] = useState<string | null>(null);
@@ -97,7 +91,7 @@ export default function App() {
         return getItemsSplit(b.id);
       })
       .then((s) => setItemsSplit(s.participants.length > 0 ? s : null))
-      .catch((e) => setError(String(e.message ?? e)))
+      .catch((e: unknown) => setError(errorMessage(e)))
       .finally(() => setLoading(false));
   }, [tableId]);
 
@@ -113,8 +107,8 @@ export default function App() {
     try {
       const newSplit = await createSplit(bill.id, participantsCount);
       setSplit(newSplit);
-    } catch (e: any) {
-      setError(String(e.message ?? e));
+    } catch (e: unknown) {
+      setError(errorMessage(e));
     }
   }
 
@@ -144,8 +138,8 @@ export default function App() {
       const refreshedSplit = await getSplit(split.id);
       setSplit(refreshedSplit);
       await refreshBillAndItemsSplit(bill.id);
-    } catch (e: any) {
-      setError(String(e.message ?? e));
+    } catch (e: unknown) {
+      setError(errorMessage(e));
       setPaymentState((s) => ({ ...s, [participant.id]: "error" }));
     }
   }
@@ -187,8 +181,8 @@ export default function App() {
       setSelectedItemIds(new Set());
       setItemsTipPercent(0);
       await refreshBillAndItemsSplit(bill.id);
-    } catch (e: any) {
-      setError(String(e.message ?? e));
+    } catch (e: unknown) {
+      setError(errorMessage(e));
       // someone may have claimed an item in the meantime — resync the claimed list
       if (bill) await refreshBillAndItemsSplit(bill.id).catch(() => {});
     } finally {
@@ -293,7 +287,7 @@ export default function App() {
                     bill.currency,
                   )}
                 </span>
-                <button disabled={payingItems} onClick={handlePayItems}>
+                <button disabled={payingItems} onClick={() => void handlePayItems()}>
                   {payingItems ? "Оплачиваем…" : "Оплатить выбранное"}
                 </button>
               </div>
@@ -318,7 +312,7 @@ export default function App() {
               onChange={(e) => setParticipantsCount(Math.max(1, Number(e.target.value)))}
             />
           </label>
-          <button onClick={handleCreateEqualSplit}>Разделить поровну</button>
+          <button onClick={() => void handleCreateEqualSplit()}>Разделить поровну</button>
         </section>
       )}
 
@@ -343,11 +337,9 @@ export default function App() {
                       baseAmountMinor={remaining}
                       currency={bill.currency}
                       percent={tipPercentByParticipant[p.id] ?? 0}
-                      onChange={(percent) =>
-                        setTipPercentByParticipant((t) => ({ ...t, [p.id]: percent }))
-                      }
+                      onChange={(percent) => setTipPercentByParticipant((t) => ({ ...t, [p.id]: percent }))}
                     />
-                    <button disabled={state === "paying"} onClick={() => handlePayEqual(p)}>
+                    <button disabled={state === "paying"} onClick={() => void handlePayEqual(p)}>
                       {state === "paying" ? "Оплачиваем…" : "Оплатить"}
                     </button>
                   </>

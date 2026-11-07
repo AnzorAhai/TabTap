@@ -1,24 +1,31 @@
 export type Currency = string;
 
-export enum BillStatus {
-  OPEN = "open",
-  PARTIALLY_PAID = "partially_paid",
-  PAID = "paid",
-  CLOSED = "closed",
-}
+// Status/type values are plain string-literal unions (not TS enums), so frontends
+// can compare against "paid", "succeeded", ... using type-only imports, and the
+// backend can still use the named constants below.
 
-export enum SplitType {
-  EQUAL = "equal",
-  BY_ITEMS = "by_items",
-  BY_GUEST = "by_guest",
-}
+export const BillStatus = {
+  OPEN: "open",
+  PARTIALLY_PAID: "partially_paid",
+  PAID: "paid",
+  CLOSED: "closed",
+} as const;
+export type BillStatus = (typeof BillStatus)[keyof typeof BillStatus];
 
-export enum PaymentStatus {
-  PENDING = "pending",
-  SUCCEEDED = "succeeded",
-  FAILED = "failed",
-  REFUNDED = "refunded",
-}
+export const SplitType = {
+  EQUAL: "equal",
+  BY_ITEMS: "by_items",
+  BY_GUEST: "by_guest",
+} as const;
+export type SplitType = (typeof SplitType)[keyof typeof SplitType];
+
+export const PaymentStatus = {
+  PENDING: "pending",
+  SUCCEEDED: "succeeded",
+  FAILED: "failed",
+  REFUNDED: "refunded",
+} as const;
+export type PaymentStatus = (typeof PaymentStatus)[keyof typeof PaymentStatus];
 
 export interface Tenant {
   id: string;
