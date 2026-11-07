@@ -8,5 +8,9 @@ export default defineConfig({
   test: {
     include: ["test/**/*.spec.ts"],
     environment: "node",
+    // Starts a real PostgreSQL once per run; see test/support/global-setup.ts.
+    globalSetup: ["test/support/global-setup.ts"],
+    hookTimeout: 60_000,
+    testTimeout: 30_000,
   },
 });

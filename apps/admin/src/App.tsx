@@ -1,10 +1,17 @@
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
-import type { AdminPaymentView, AdminTableView, PaymentStatus } from "@tabtap/shared";
-import { listPayments, listTables } from "./api";
+import {
+  formatMoney as formatMinor,
+  type AdminPaymentView,
+  type AdminTableView,
+  type ExchangeRateView,
+  type PaymentMode,
+  type PaymentStatus,
+} from "@tabtap/shared";
+import { listExchangeRates, listPayments, listTables } from "./api";
 
 function formatMoney(minor: number, currency: string): string {
-  return `${(minor / 100).toFixed(2)} ${currency}`;
+  return formatMinor(minor, currency, "ru-RU");
 }
 
 function formatTime(iso: string): string {
@@ -15,7 +22,15 @@ const STATUS_LABEL: Record<PaymentStatus, string> = {
   pending: "В обработке",
   succeeded: "Оплачено",
   failed: "Ошибка",
+  expired: "Истекло",
+  canceled: "Отменено",
   refunded: "Возврат",
+};
+
+const MODE_LABEL: Record<PaymentMode, string> = {
+  full: "Весь остаток",
+  items: "Блюда",
+  shares: "Доли",
 };
 
 function QrImage({ value }: { value: string }) {
@@ -40,14 +55,16 @@ function QrImage({ value }: { value: string }) {
 export default function App() {
   const [tables, setTables] = useState<AdminTableView[]>([]);
   const [payments, setPayments] = useState<AdminPaymentView[]>([]);
+  const [rates, setRates] = useState<ExchangeRateView[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([listTables(), listPayments()])
-      .then(([t, p]) => {
+    Promise.all([listTables(), listPayments(), listExchangeRates()])
+      .then(([t, p, r]) => {
         setTables(t);
         setPayments(p);
+        setRates(r);
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false));
@@ -80,15 +97,30 @@ export default function App() {
       </section>
 
       <section>
+        <h2>Курс</h2>
+        {rates.length === 0 ? (
+          <p>Курс не задан — гости могут платить только в валюте счёта.</p>
+        ) : (
+          rates.map((r) => (
+            <p key={`${r.baseCurrency}-${r.quoteCurrency}`}>
+              1 {r.baseCurrency} = {r.rate} {r.quoteCurrency} · с {formatTime(r.effectiveAt)} ({r.source})
+            </p>
+          ))
+        )}
+      </section>
+
+      <section>
         <h2>Платежи</h2>
         <table className="payments-table">
           <thead>
             <tr>
               <th>Время</th>
               <th>Стол</th>
-              <th>Гость</th>
+              <th>Что оплачено</th>
               <th>Сумма</th>
               <th>Чаевые</th>
+              <th>Комиссия</th>
+              <th>Списано с гостя</th>
               <th>Статус</th>
             </tr>
           </thead>
@@ -97,9 +129,11 @@ export default function App() {
               <tr key={payment.id}>
                 <td>{formatTime(payment.createdAt)}</td>
                 <td>{payment.tableLabel}</td>
-                <td>{payment.participantLabel ?? "—"}</td>
+                <td>{MODE_LABEL[payment.mode]}</td>
                 <td>{formatMoney(payment.amountMinor, payment.currency)}</td>
                 <td>{payment.tipMinor > 0 ? formatMoney(payment.tipMinor, payment.currency) : "—"}</td>
+                <td>{formatMoney(payment.platformFeeMinor, payment.currency)}</td>
+                <td>{formatMoney(payment.chargeAmountMinor, payment.chargeCurrency)}</td>
                 <td>
                   <span className={`payment-status status-${payment.status}`}>{STATUS_LABEL[payment.status]}</span>
                 </td>
@@ -107,7 +141,7 @@ export default function App() {
             ))}
             {payments.length === 0 && (
               <tr>
-                <td colSpan={6}>Платежей пока нет.</td>
+                <td colSpan={8}>Платежей пока нет.</td>
               </tr>
             )}
           </tbody>

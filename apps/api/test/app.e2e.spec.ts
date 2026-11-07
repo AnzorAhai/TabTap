@@ -14,6 +14,7 @@ const config = loadConfig({
   NODE_ENV: "test",
   DATABASE_URL: "postgresql://unused/test",
   CORS_ORIGINS: "https://guest.example.com",
+  BACKGROUND_JOBS: "false",
 });
 
 const pool = {
@@ -68,12 +69,18 @@ describe("API over HTTP", () => {
 
   it("validates request bodies, including unknown fields and limits", async () => {
     const billId = "6f1c2e9a-1111-4111-8111-111111111111";
-    await http().post(`/bills/${billId}/splits`).send({ participantsCount: 100000 }).expect(400);
+    await http().put(`/bills/${billId}/equal-split`).send({ shareCount: 100000 }).expect(400);
     const res = await http()
-      .post("/payments")
-      .send({ billId, amountMinor: 100, currency: "USD", sneaky: true })
+      .post(`/bills/${billId}/payments`)
+      .set("Idempotency-Key", "test-key-123")
+      .send({ mode: "full", currency: "USD", sneaky: true })
       .expect(400);
     expect(res.body.message).toEqual(["property sneaky should not exist"]);
+    await http()
+      .post(`/bills/${billId}/payments`)
+      .set("Idempotency-Key", "test-key-123")
+      .send({ mode: "everything", currency: "USD" })
+      .expect(400);
     expect(pool.query).not.toHaveBeenCalled();
   });
 

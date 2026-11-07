@@ -1,124 +1,92 @@
-import { Injectable } from "@nestjs/common";
-import { Bill, BillStatus } from "@tabtap/shared";
-import { MarkPaidInput, POSConnector, POSConnectorCapabilities } from "./pos-connector.interface";
+import { Logger } from "@nestjs/common";
+import { percentOf, type BillItem } from "@tabtap/shared";
+import type { MarkPaidInput, POSConnector, PosBill } from "./pos-connector.interface";
 
-// In-memory POS with a couple of seeded demo bills, keyed by table id.
-// Lets the guest app and QA exercise the full flow before any real POS is connected.
-@Injectable()
+const IVA_PERCENT = 16; // Venezuela's general VAT rate
+const SERVICE_PERCENT = 10; // customary restaurant service charge
+
+/** A Venezuelan-style bill: prices in USD, IVA per line, 10% service on the subtotal. */
+function demoBill(externalId: string, lines: [id: string, name: string, quantity: number, unitPriceCents: number][]) {
+  const items: BillItem[] = lines.map(([id, name, quantity, unitPriceMinor]) => ({
+    id,
+    name,
+    quantity,
+    unitPriceMinor,
+    taxMinor: percentOf(unitPriceMinor * quantity, IVA_PERCENT),
+    discountMinor: 0,
+  }));
+  const subtotal = items.reduce((s, i) => s + i.unitPriceMinor * i.quantity, 0);
+  const tax = items.reduce((s, i) => s + i.taxMinor, 0);
+  const serviceChargeMinor = percentOf(subtotal, SERVICE_PERCENT);
+  const bill: PosBill = {
+    externalId,
+    currency: "USD",
+    items,
+    serviceChargeMinor,
+    totalMinor: subtotal + tax + serviceChargeMinor,
+    status: "open",
+  };
+  return bill;
+}
+
+/**
+ * In-memory POS with three seeded demo bills, keyed by the POS table reference.
+ * Lets the guest app and QA exercise the whole flow before any real POS is connected.
+ * State resets when the API restarts.
+ */
 export class MockPOSConnector implements POSConnector {
   readonly type = "mock";
-  readonly capabilities: POSConnectorCapabilities = {
-    supportsWebhooks: false,
-    supportsMarkPaid: true,
-    supportsPartialPayment: true,
-  };
+  private readonly logger = new Logger(MockPOSConnector.name);
 
-  private readonly bills = new Map<string, Bill>([
+  private readonly bills = new Map<string, PosBill>([
     [
       "table-1",
-      {
-        id: "bill-1",
-        tenantId: "demo-tenant",
-        venueId: "demo-venue",
-        tableId: "table-1",
-        externalPosId: "mock-pos-bill-1",
-        currency: "EUR",
-        items: [
-          {
-            id: "item-1",
-            name: "Margherita Pizza",
-            quantity: 1,
-            unitPriceMinor: 1200,
-            taxMinor: 120,
-            discountMinor: 0,
-          },
-          { id: "item-2", name: "Caesar Salad", quantity: 1, unitPriceMinor: 900, taxMinor: 90, discountMinor: 0 },
-          { id: "item-3", name: "Sparkling Water", quantity: 2, unitPriceMinor: 350, taxMinor: 70, discountMinor: 0 },
-        ],
-        totalMinor: 1200 + 900 + 700 + 280,
-        paidMinor: 0,
-        status: BillStatus.OPEN,
-        lastSyncedAt: new Date().toISOString(),
-      },
+      demoBill("demo-ve-bill-1", [
+        ["t1-arepa", "Arepa reina pepiada", 2, 650],
+        ["t1-cachapa", "Cachapa con queso de mano", 1, 800],
+        ["t1-tequenos", "Tequeños (6 u.)", 1, 550],
+        ["t1-papelon", "Papelón con limón", 3, 250],
+      ]),
     ],
     [
       "table-2",
-      {
-        id: "bill-2",
-        tenantId: "demo-tenant",
-        venueId: "demo-venue",
-        tableId: "table-2",
-        externalPosId: "mock-pos-bill-2",
-        currency: "EUR",
-        items: [
-          {
-            id: "item-4",
-            name: "Ribeye Steak 300g",
-            quantity: 2,
-            unitPriceMinor: 2900,
-            taxMinor: 290,
-            discountMinor: 0,
-          },
-          { id: "item-5", name: "Truffle Fries", quantity: 1, unitPriceMinor: 700, taxMinor: 70, discountMinor: 0 },
-          {
-            id: "item-6",
-            name: "House Red Wine, glass",
-            quantity: 2,
-            unitPriceMinor: 600,
-            taxMinor: 60,
-            discountMinor: 0,
-          },
-        ],
-        totalMinor: 2 * 2900 + 700 + 2 * 600 + 290 * 2 + 70 + 60 * 2,
-        paidMinor: 0,
-        status: BillStatus.OPEN,
-        lastSyncedAt: new Date().toISOString(),
-      },
+      demoBill("demo-ve-bill-2", [
+        ["t2-pabellon", "Pabellón criollo", 2, 1200],
+        ["t2-asado", "Asado negro", 1, 1450],
+        ["t2-ensalada", "Ensalada de aguacate", 1, 600],
+        ["t2-polar", "Cerveza Polar", 4, 200],
+        ["t2-quesillo", "Quesillo", 2, 400],
+      ]),
     ],
     [
       "table-3",
-      {
-        id: "bill-3",
-        tenantId: "demo-tenant",
-        venueId: "demo-venue",
-        tableId: "table-3",
-        externalPosId: "mock-pos-bill-3",
-        currency: "EUR",
-        items: [
-          { id: "item-7", name: "Beef Burger", quantity: 3, unitPriceMinor: 1400, taxMinor: 140, discountMinor: 0 },
-          { id: "item-8", name: "Onion Rings", quantity: 1, unitPriceMinor: 550, taxMinor: 55, discountMinor: 0 },
-          { id: "item-9", name: "Craft Cola", quantity: 3, unitPriceMinor: 400, taxMinor: 40, discountMinor: 0 },
-        ],
-        totalMinor: 3 * 1400 + 550 + 3 * 400 + 140 * 3 + 55 + 40 * 3,
-        paidMinor: 0,
-        status: BillStatus.OPEN,
-        lastSyncedAt: new Date().toISOString(),
-      },
+      demoBill("demo-ve-bill-3", [
+        ["t3-parrilla", "Parrilla mixta para dos", 1, 3200],
+        ["t3-hallaca", "Hallaca", 2, 700],
+        ["t3-malta", "Malta", 2, 180],
+        ["t3-parchita", "Jugo de parchita", 2, 300],
+        ["t3-tresleches", "Torta tres leches", 1, 500],
+      ]),
     ],
   ]);
 
-  async getOpenBill(tableExternalRef: string): Promise<Bill | null> {
-    const bill = this.bills.get(tableExternalRef);
-    return bill ? { ...bill } : null;
+  /** Payments the POS has been told about, by payment id (marking the same payment twice is a no-op). */
+  readonly markedPayments = new Map<string, MarkPaidInput & { externalBillId: string }>();
+
+  async getOpenBill(posTableRef: string): Promise<PosBill | null> {
+    const bill = this.bills.get(posTableRef);
+    return bill && bill.status === "open" ? structuredClone(bill) : null;
   }
 
-  async getBillDetails(billExternalRef: string): Promise<Bill> {
-    const bill = [...this.bills.values()].find((b) => b.externalPosId === billExternalRef);
-    if (!bill) {
-      throw new Error(`Bill ${billExternalRef} not found`);
+  async markPaid(externalBillId: string, payment: MarkPaidInput): Promise<void> {
+    if (![...this.bills.values()].some((b) => b.externalId === externalBillId)) {
+      throw new Error(`Bill ${externalBillId} not found on the mock POS`);
     }
-    return { ...bill };
-  }
-
-  async markPaid(billExternalRef: string, payment: MarkPaidInput): Promise<void> {
-    const bill = [...this.bills.values()].find((b) => b.externalPosId === billExternalRef);
-    if (!bill) {
-      throw new Error(`Bill ${billExternalRef} not found`);
-    }
-    bill.paidMinor = Math.min(bill.totalMinor, bill.paidMinor + payment.amountMinor);
-    bill.status = bill.paidMinor >= bill.totalMinor ? BillStatus.PAID : BillStatus.PARTIALLY_PAID;
-    bill.lastSyncedAt = new Date().toISOString();
-    this.bills.set(bill.tableId, bill);
+    if (this.markedPayments.has(payment.paymentId)) return;
+    this.markedPayments.set(payment.paymentId, { ...payment, externalBillId });
+    this.logger.log(
+      `Bill ${externalBillId}: payment ${payment.paymentId} of ${payment.amountMinor} ${payment.currency}`,
+    );
   }
 
   async healthCheck(): Promise<boolean> {

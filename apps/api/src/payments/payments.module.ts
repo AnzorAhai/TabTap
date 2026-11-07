@@ -1,16 +1,15 @@
 import { Module } from "@nestjs/common";
 import { PaymentsIntegrationModule } from "../integrations/payments/payments-integration.module";
 import { PosModule } from "../integrations/pos/pos.module";
-import { BillsModule } from "../bills/bills.module";
+import { BackgroundJobsService } from "./background-jobs.service";
 import { PaymentsController } from "./payments.controller";
 import { PaymentsService } from "./payments.service";
-import { PaymentsRepository } from "./payments.repository";
-import { ReceiptsRepository } from "./receipts.repository";
+import { PosSyncService } from "./pos-sync.service";
 
 @Module({
-  imports: [PaymentsIntegrationModule, PosModule, BillsModule],
+  imports: [PaymentsIntegrationModule, PosModule],
   controllers: [PaymentsController],
-  providers: [PaymentsService, PaymentsRepository, ReceiptsRepository],
-  exports: [PaymentsRepository],
+  providers: [PaymentsService, PosSyncService, BackgroundJobsService],
+  exports: [PaymentsService, PosSyncService, BackgroundJobsService],
 })
 export class PaymentsModule {}

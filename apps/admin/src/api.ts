@@ -1,14 +1,20 @@
-import type { AdminPaymentView, AdminTableView } from "@tabtap/shared";
+import type { AdminPaymentView, AdminTableView, ExchangeRateView } from "@tabtap/shared";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
+const API_URL = (import.meta.env.VITE_API_URL ?? "http://localhost:3000").replace(/\/+$/, "");
 
 async function request<T>(path: string): Promise<T> {
   const res = await fetch(`${API_URL}${path}`);
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`${res.status} ${res.statusText}: ${body}`);
+    let message = `${res.status} ${res.statusText}`;
+    try {
+      const body = (await res.json()) as { message?: string | string[] };
+      if (body.message) message = Array.isArray(body.message) ? body.message.join("; ") : body.message;
+    } catch {
+      // not JSON
+    }
+    throw new Error(message);
   }
-  return res.json() as Promise<T>;
+  return (await res.json()) as T;
 }
 
 export function listTables(): Promise<AdminTableView[]> {
@@ -17,4 +23,8 @@ export function listTables(): Promise<AdminTableView[]> {
 
 export function listPayments(): Promise<AdminPaymentView[]> {
   return request("/admin/payments");
+}
+
+export function listExchangeRates(): Promise<ExchangeRateView[]> {
+  return request("/admin/exchange-rates");
 }

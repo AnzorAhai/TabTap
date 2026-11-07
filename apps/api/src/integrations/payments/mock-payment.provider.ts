@@ -1,36 +1,40 @@
-import { Injectable } from "@nestjs/common";
-import { PaymentStatus } from "@tabtap/shared";
-import {
-  CreatePaymentIntentInput,
-  PaymentIntentResult,
+import { randomUUID } from "node:crypto";
+import type { MockPaymentFlow } from "../../config/app-config";
+import type {
+  CreateIntentInput,
+  IntentResult,
   PaymentProvider,
+  ProviderPaymentStatus,
   WebhookResult,
 } from "./payment-provider.interface";
 
-// Settles instantly with no real card entry — lets the guest flow be smoke-tested
-// end-to-end before a real payment provider account exists.
-@Injectable()
+/**
+ * No real money moves. "instant" settles every payment immediately; "manual" leaves
+ * it pending until POST /payments/:id/mock-confirm — the shape of asynchronous
+ * methods like Pago Móvil, where the guest confirms in their banking app.
+ */
 export class MockPaymentProvider implements PaymentProvider {
   readonly type = "mock";
-  private counter = 0;
 
-  async createPaymentIntent(_input: CreatePaymentIntentInput): Promise<PaymentIntentResult> {
-    this.counter += 1;
+  constructor(private readonly flow: MockPaymentFlow) {}
+
+  async createIntent(_input: CreateIntentInput): Promise<IntentResult> {
     return {
-      providerRef: `mock-pi-${this.counter}`,
-      status: PaymentStatus.SUCCEEDED,
+      providerRef: `mock_${randomUUID()}`,
+      status: this.flow === "instant" ? "succeeded" : "pending",
     };
   }
 
-  async confirmPayment(): Promise<PaymentStatus> {
-    return PaymentStatus.SUCCEEDED;
+  async getStatus(_providerRef: string): Promise<ProviderPaymentStatus> {
+    // The outcome of a manual mock payment only ever arrives via mock-confirm.
+    return "pending";
   }
 
-  async handleWebhook(): Promise<WebhookResult | null> {
+  async cancel(): Promise<void> {}
+
+  async parseWebhook(): Promise<WebhookResult | null> {
     return null;
   }
 
-  async refund(): Promise<void> {
-    // no-op in mock mode
-  }
+  async refund(): Promise<void> {}
 }

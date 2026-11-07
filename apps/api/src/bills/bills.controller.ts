@@ -1,40 +1,50 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Put, Sse, type MessageEvent } from "@nestjs/common";
+import { SkipThrottle } from "@nestjs/throttler";
+import type { TableBillView } from "@tabtap/shared";
+import { IsInt, Max, Min } from "class-validator";
+import type { Observable } from "rxjs";
+import { BillEventsService } from "../events/bill-events.service";
 import { BillsService } from "./bills.service";
-import { CreateSplitDto } from "./dto/create-split.dto";
-import { PayItemsDto } from "./dto/pay-items.dto";
+
+export class SetEqualSplitDto {
+  @IsInt()
+  @Min(2)
+  @Max(30)
+  shareCount!: number;
+}
 
 @Controller()
 export class BillsController {
-  constructor(private readonly billsService: BillsService) {}
+  constructor(
+    private readonly bills: BillsService,
+    private readonly events: BillEventsService,
+  ) {}
 
   // The path segment is the table's QR token (what the guest scanned), not its database id.
   @Get("tables/:qrToken/bill")
-  getBillForTable(@Param("qrToken") qrToken: string) {
-    return this.billsService.getBillForTable(qrToken);
+  getTableBill(@Param("qrToken") qrToken: string): Promise<TableBillView> {
+    return this.bills.getTableView(qrToken);
   }
 
   @Get("bills/:billId")
-  getBill(@Param("billId", ParseUUIDPipe) billId: string) {
-    return this.billsService.getBill(billId);
+  getBill(@Param("billId", ParseUUIDPipe) billId: string): Promise<TableBillView> {
+    return this.bills.getView(billId);
   }
 
-  @Post("bills/:billId/splits")
-  createSplit(@Param("billId", ParseUUIDPipe) billId: string, @Body() dto: CreateSplitDto) {
-    return this.billsService.createEqualSplit(billId, dto.participantsCount);
+  /** Server-sent events: "bill.updated" whenever anything on this bill changes. */
+  @SkipThrottle()
+  @Sse("bills/:billId/events")
+  events$(@Param("billId", ParseUUIDPipe) billId: string): Observable<MessageEvent> {
+    return this.events.stream(billId);
   }
 
-  @Get("splits/:splitId")
-  getSplit(@Param("splitId", ParseUUIDPipe) splitId: string) {
-    return this.billsService.getSplit(splitId);
+  @Put("bills/:billId/equal-split")
+  setEqualSplit(@Param("billId", ParseUUIDPipe) billId: string, @Body() dto: SetEqualSplitDto): Promise<TableBillView> {
+    return this.bills.setEqualSplit(billId, dto.shareCount);
   }
 
-  @Get("bills/:billId/items-split")
-  async getItemsSplit(@Param("billId", ParseUUIDPipe) billId: string) {
-    return (await this.billsService.getItemsSplit(billId)) ?? { participants: [] };
-  }
-
-  @Post("bills/:billId/items-split")
-  payForItems(@Param("billId", ParseUUIDPipe) billId: string, @Body() dto: PayItemsDto) {
-    return this.billsService.payForItems(billId, dto.itemIds);
+  @Delete("bills/:billId/equal-split")
+  removeEqualSplit(@Param("billId", ParseUUIDPipe) billId: string): Promise<TableBillView> {
+    return this.bills.removeEqualSplit(billId);
   }
 }

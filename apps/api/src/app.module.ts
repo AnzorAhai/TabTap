@@ -7,6 +7,7 @@ import { AllExceptionsFilter } from "./common/all-exceptions.filter";
 import { RequestLoggerMiddleware } from "./common/request-logger.middleware";
 import { APP_CONFIG, AppConfig } from "./config/app-config";
 import { ConfigModule } from "./config/config.module";
+import { DataModule } from "./data/data.module";
 import { DatabaseModule } from "./database/database.module";
 import { HealthController } from "./health/health.controller";
 import { PaymentsModule } from "./payments/payments.module";
@@ -15,9 +16,13 @@ import { PaymentsModule } from "./payments/payments.module";
   imports: [
     ConfigModule,
     DatabaseModule,
+    DataModule,
     ThrottlerModule.forRootAsync({
       inject: [APP_CONFIG],
-      useFactory: (config: AppConfig) => [{ name: "default", ttl: 60_000, limit: config.rateLimitPerMinute }],
+      useFactory: (config: AppConfig) => ({
+        throttlers: [{ name: "default", ttl: 60_000, limit: config.rateLimitPerMinute }],
+        skipIf: () => !config.rateLimitEnabled,
+      }),
     }),
     BillsModule,
     PaymentsModule,

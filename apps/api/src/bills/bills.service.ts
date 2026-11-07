@@ -1,71 +1,133 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { Bill, Split } from "@tabtap/shared";
-import { POS_CONNECTOR, POSConnector } from "../integrations/pos/pos-connector.interface";
-import { TablesRepository } from "../tables/tables.repository";
-import { BillsRepository } from "./bills.repository";
-import { SplitsRepository } from "./splits.repository";
+import { ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { billBreakdown, type PaymentCurrencyOption, type TableBillView } from "@tabtap/shared";
+import { Pool } from "pg";
+import { APP_CONFIG, AppConfig } from "../config/app-config";
+import { BillsRepository } from "../data/bills.repository";
+import { EqualSplitsRepository } from "../data/equal-splits.repository";
+import { ExchangeRatesRepository } from "../data/exchange-rates.repository";
+import { PaymentsRepository } from "../data/payments.repository";
+import type { BillRecord, TableContext } from "../data/records";
+import { TablesRepository } from "../data/tables.repository";
+import { DB_POOL } from "../database/database.module";
+import { withTransaction } from "../database/transaction";
+import { computeBillState } from "../domain/bill-state";
+import { BillEventsService } from "../events/bill-events.service";
+import { POS_CONNECTOR, type POSConnector } from "../integrations/pos/pos-connector.interface";
 
 @Injectable()
 export class BillsService {
   constructor(
-    @Inject(POS_CONNECTOR) private readonly posConnector: POSConnector,
-    private readonly tablesRepository: TablesRepository,
-    private readonly billsRepository: BillsRepository,
-    private readonly splitsRepository: SplitsRepository,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
+    @Inject(DB_POOL) private readonly pool: Pool,
+    @Inject(POS_CONNECTOR) private readonly pos: POSConnector,
+    private readonly tables: TablesRepository,
+    private readonly bills: BillsRepository,
+    private readonly splits: EqualSplitsRepository,
+    private readonly payments: PaymentsRepository,
+    private readonly rates: ExchangeRatesRepository,
+    private readonly events: BillEventsService,
   ) {}
 
-  async getBillForTable(qrToken: string): Promise<Bill> {
-    const table = await this.tablesRepository.findByQrToken(qrToken);
-    const posBill = await this.posConnector.getOpenBill(qrToken);
-    if (!posBill) {
-      throw new NotFoundException(`No open bill for table ${qrToken}`);
-    }
-    return this.billsRepository.upsertFromPosSnapshot(posBill, table);
+  /** What a guest sees after scanning a table's QR code; refreshes the bill from the POS first. */
+  async getTableView(qrToken: string): Promise<TableBillView> {
+    const table = await this.tables.findContextByQrToken(qrToken);
+    if (!table || !table.isActive) throw new NotFoundException("Table not found");
+    const posBill = await this.pos.getOpenBill(table.posTableRef);
+    if (!posBill) throw new NotFoundException("There is no open bill on this table");
+    const { bill, changed } = await this.bills.upsertFromPos(table, posBill);
+    if (changed) this.events.emit(bill.id);
+    return this.buildView(bill, table);
   }
 
-  async getBill(billId: string): Promise<Bill> {
-    return this.billsRepository.findById(billId);
+  /** The same view by bill id, without asking the POS (used to refresh after an event). */
+  async getView(billId: string): Promise<TableBillView> {
+    const bill = await this.bills.findById(billId);
+    return this.buildView(bill, await this.tableOf(bill));
   }
 
-  // Re-syncs our snapshot after something changed the bill on the POS side (e.g. a payment).
-  async refreshBillFromPos(bill: Bill): Promise<Bill> {
-    const posBill = await this.posConnector.getBillDetails(bill.externalPosId);
-    return this.billsRepository.upsertFromPosSnapshot(posBill, {
-      id: bill.tableId,
-      tenantId: bill.tenantId,
-      venueId: bill.venueId,
+  async setEqualSplit(billId: string, shareCount: number): Promise<TableBillView> {
+    await withTransaction(this.pool, async (db) => {
+      const bill = await this.bills.lockById(db, billId);
+      const split = await this.splits.findByBill(billId, db);
+      if (split?.frozenAt) throw new ConflictException("Shares are already being paid; the split can't change now");
+      if (bill.posStatus === "closed") throw new ConflictException("This bill is closed");
+      await this.splits.upsert(db, bill.tenantId, billId, shareCount);
     });
+    this.events.emit(billId);
+    return this.getView(billId);
   }
 
-  async createEqualSplit(billId: string, participantsCount: number): Promise<Split> {
-    const bill = await this.billsRepository.findById(billId);
-    const remainingMinor = bill.totalMinor - bill.paidMinor;
-    return this.splitsRepository.createEqualSplit(bill.tenantId, billId, remainingMinor, participantsCount);
+  async removeEqualSplit(billId: string): Promise<TableBillView> {
+    await withTransaction(this.pool, async (db) => {
+      await this.bills.lockById(db, billId);
+      const split = await this.splits.findByBill(billId, db);
+      if (split?.frozenAt) throw new ConflictException("Shares are already being paid; the split can't be removed");
+      await this.splits.delete(db, billId);
+    });
+    this.events.emit(billId);
+    return this.getView(billId);
   }
 
-  async getSplit(splitId: string): Promise<Split> {
-    return this.splitsRepository.findById(splitId);
+  private async tableOf(bill: BillRecord): Promise<TableContext> {
+    const table = await this.tables.findContextByTableId(bill.tableId);
+    if (!table) throw new NotFoundException("Table not found");
+    return table;
   }
 
-  async markParticipantPaid(splitId: string, participantId: string, amountMinor: number): Promise<Split> {
-    await this.splitsRepository.addParticipantPayment(splitId, participantId, amountMinor);
-    return this.splitsRepository.findById(splitId);
+  private async buildView(bill: BillRecord, table: TableContext): Promise<TableBillView> {
+    const [payments, split, paymentCurrencies] = await Promise.all([
+      this.payments.listLiveForBill(bill.id),
+      this.splits.findByBill(bill.id),
+      this.paymentCurrencies(bill, table),
+    ]);
+    const state = computeBillState(bill, payments, split, new Date());
+    const breakdown = billBreakdown(bill.items, bill.serviceChargeMinor, bill.totalMinor);
+
+    return {
+      bill: {
+        id: bill.id,
+        tenantName: table.tenantName,
+        venueName: table.venueName,
+        tableLabel: table.tableLabel,
+        currency: bill.currency,
+        status: state.status,
+        items: bill.items.map((item) => ({
+          id: item.id,
+          name: item.name,
+          quantity: item.quantity,
+          unitPriceMinor: item.unitPriceMinor,
+          lineTotalMinor: state.lineTotals.get(item.id)!,
+          state: state.itemStates.get(item.id)!,
+        })),
+        ...breakdown,
+        paidMinor: state.paidMinor,
+        reservedMinor: state.reservedMinor,
+        remainingMinor: state.remainingMinor,
+      },
+      equalSplit: state.equalSplit && {
+        shareCount: state.equalSplit.shareCount,
+        frozen: state.equalSplit.frozen,
+        shares: state.equalSplit.shareAmounts.map((amountMinor, index) => ({
+          index,
+          amountMinor,
+          state: state.equalSplit!.shareStates[index],
+        })),
+      },
+      modes: state.modes,
+      paymentCurrencies,
+      tipPercentOptions: table.tipPercentOptions,
+      holdMinutes: this.config.paymentHoldMinutes,
+    };
   }
 
-  async getItemsSplit(billId: string): Promise<Split | null> {
-    return this.splitsRepository.findByItemsSplitForBill(billId);
-  }
-
-  async payForItems(billId: string, itemIds: string[]): Promise<{ split: Split; participantId: string }> {
-    const bill = await this.billsRepository.findById(billId);
-    const selected = bill.items.filter((item) => itemIds.includes(item.id));
-    if (selected.length !== itemIds.length) {
-      throw new BadRequestException("One or more selected items do not belong to this bill");
+  /** The bill currency, plus every extra currency the restaurant accepts and has a rate for. */
+  private async paymentCurrencies(bill: BillRecord, table: TableContext): Promise<PaymentCurrencyOption[]> {
+    const options: PaymentCurrencyOption[] = [{ currency: bill.currency, rate: null, rateEffectiveAt: null }];
+    for (const currency of table.paymentCurrencies) {
+      if (currency === bill.currency) continue;
+      const rate = await this.rates.findCurrent(table.tenantId, bill.currency, currency);
+      if (rate) options.push({ currency, rate: rate.rate, rateEffectiveAt: rate.effectiveAt.toISOString() });
     }
-    const amountDueMinor = selected.reduce(
-      (sum, item) => sum + item.unitPriceMinor * item.quantity + item.taxMinor - item.discountMinor,
-      0,
-    );
-    return this.splitsRepository.addItemsParticipant(bill.tenantId, billId, itemIds, amountDueMinor);
+    return options;
   }
 }
