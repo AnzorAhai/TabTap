@@ -14,7 +14,7 @@ const paymentProviderFactory = {
       case "stripe":
         return new StripeProvider(config.stripe);
       case "mock":
-        return new MockPaymentProvider();
+        return new MockPaymentProvider(config.mockPaymentFlow);
     }
   },
 };

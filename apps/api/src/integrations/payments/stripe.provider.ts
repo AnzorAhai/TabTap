@@ -1,21 +1,19 @@
 import Stripe from "stripe";
-import { PaymentStatus } from "@tabtap/shared";
-import {
-  CreatePaymentIntentInput,
-  PaymentIntentResult,
+import type {
+  CreateIntentInput,
+  IntentResult,
   PaymentProvider,
+  ProviderPaymentStatus,
   WebhookResult,
 } from "./payment-provider.interface";
 
-const STRIPE_TO_PAYMENT_STATUS: Record<string, PaymentStatus> = {
-  requires_payment_method: PaymentStatus.PENDING,
-  requires_confirmation: PaymentStatus.PENDING,
-  requires_action: PaymentStatus.PENDING,
-  processing: PaymentStatus.PENDING,
-  succeeded: PaymentStatus.SUCCEEDED,
-  canceled: PaymentStatus.FAILED,
-};
+function toStatus(status: Stripe.PaymentIntent.Status): ProviderPaymentStatus {
+  if (status === "succeeded") return "succeeded";
+  if (status === "canceled") return "failed";
+  return "pending";
+}
 
+// Kept for markets where Stripe operates; not available in Venezuela.
 export class StripeProvider implements PaymentProvider {
   readonly type = "stripe";
   private readonly stripe: Stripe;
@@ -29,46 +27,50 @@ export class StripeProvider implements PaymentProvider {
     this.webhookSecret = options.webhookSecret;
   }
 
-  async createPaymentIntent(input: CreatePaymentIntentInput): Promise<PaymentIntentResult> {
-    const intent = await this.stripe.paymentIntents.create({
-      amount: input.amountMinor,
-      currency: input.currency.toLowerCase(),
-      metadata: input.metadata,
-      automatic_payment_methods: { enabled: true },
-    });
-    return {
-      providerRef: intent.id,
-      clientSecret: intent.client_secret ?? undefined,
-      status: STRIPE_TO_PAYMENT_STATUS[intent.status] ?? PaymentStatus.PENDING,
-    };
+  async createIntent(input: CreateIntentInput): Promise<IntentResult> {
+    const intent = await this.stripe.paymentIntents.create(
+      {
+        amount: input.amountMinor,
+        currency: input.currency.toLowerCase(),
+        description: input.description,
+        metadata: { paymentId: input.paymentId },
+        automatic_payment_methods: { enabled: true },
+      },
+      { idempotencyKey: input.paymentId },
+    );
+    return { providerRef: intent.id, status: toStatus(intent.status) };
   }
 
-  async confirmPayment(providerRef: string): Promise<PaymentStatus> {
+  async getStatus(providerRef: string): Promise<ProviderPaymentStatus> {
     const intent = await this.stripe.paymentIntents.retrieve(providerRef);
-    return STRIPE_TO_PAYMENT_STATUS[intent.status] ?? PaymentStatus.PENDING;
+    return toStatus(intent.status);
   }
 
-  // NOTE: this requires the *raw* request body, not JSON-parsed — Stripe signature
-  // verification fails otherwise. Wire this up with a raw-body route when adding webhooks for real.
-  async handleWebhook(payload: unknown, signature?: string): Promise<WebhookResult | null> {
-    if (!this.webhookSecret || !signature) {
+  async cancel(providerRef: string): Promise<void> {
+    await this.stripe.paymentIntents.cancel(providerRef);
+  }
+
+  async parseWebhook(
+    rawBody: Buffer,
+    headers: Record<string, string | string[] | undefined>,
+  ): Promise<WebhookResult | null> {
+    const signature = headers["stripe-signature"];
+    if (!this.webhookSecret || typeof signature !== "string") {
       throw new Error("Stripe webhook secret or signature missing");
     }
-    const event = this.stripe.webhooks.constructEvent(payload as string | Buffer, signature, this.webhookSecret);
+    const event = this.stripe.webhooks.constructEvent(rawBody, signature, this.webhookSecret);
     if (event.type === "payment_intent.succeeded" || event.type === "payment_intent.payment_failed") {
       const intent = event.data.object;
       return {
         providerRef: intent.id,
-        status: STRIPE_TO_PAYMENT_STATUS[intent.status] ?? PaymentStatus.PENDING,
+        status: event.type === "payment_intent.succeeded" ? "succeeded" : "failed",
+        failureReason: intent.last_payment_error?.code ?? undefined,
       };
     }
     return null;
   }
 
   async refund(providerRef: string, amountMinor?: number): Promise<void> {
-    await this.stripe.refunds.create({
-      payment_intent: providerRef,
-      amount: amountMinor,
-    });
+    await this.stripe.refunds.create({ payment_intent: providerRef, amount: amountMinor });
   }
 }

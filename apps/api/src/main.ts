@@ -18,6 +18,7 @@ if (existsSync(envFile)) {
 async function bootstrap(): Promise<void> {
   const isProduction = process.env.NODE_ENV === "production";
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    rawBody: true, // payment webhooks verify signatures over the exact bytes received
     // JSON lines in production so the hosting platform's log search can filter by field.
     logger: new ConsoleLogger({ json: isProduction, colors: !isProduction }),
   });

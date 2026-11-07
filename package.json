@@ -20,11 +20,13 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "npm run test --workspaces --if-present",
+    "db:local": "node db/local-postgres.mjs",
     "db:migrate": "node --env-file-if-exists=apps/api/.env db/migrate.mjs",
     "db:reset-demo": "node --env-file-if-exists=apps/api/.env db/reset-test-data.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "embedded-postgres": "17.11.0-beta.19",
     "eslint": "^10.14.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.14.0",

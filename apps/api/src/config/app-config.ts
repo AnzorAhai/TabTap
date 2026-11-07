@@ -13,19 +13,35 @@ export interface AppConfig {
   corsOrigins: string[];
   /** Base URL of the guest app, used to build table QR links. */
   guestAppUrl: string;
+  /** Off only in tests that fire many requests in a burst. */
+  rateLimitEnabled: boolean;
   /** Requests per minute per client IP, applied to every route unless overridden. */
   rateLimitPerMinute: number;
+  /** How long a started payment holds its items/shares before they are released. */
+  paymentHoldMinutes: number;
+  /** Expiry sweeper and POS sync worker; off in tests, which drive them directly. */
+  backgroundJobs: boolean;
+  /**
+   * Bearer token for admin write endpoints until staff accounts exist.
+   * Unset = those endpoints are disabled.
+   */
+  adminApiToken?: string;
   posConnectorType: PosConnectorType;
   paymentProviderType: PaymentProviderType;
+  mockPaymentFlow: MockPaymentFlow;
   stripe: {
     secretKey?: string;
     webhookSecret?: string;
   };
 }
 
+export type MockPaymentFlow = "instant" | "manual";
+
 const NODE_ENVS: readonly NodeEnv[] = ["development", "production", "test"];
 const POS_CONNECTOR_TYPES: readonly PosConnectorType[] = ["mock"];
 const PAYMENT_PROVIDER_TYPES: readonly PaymentProviderType[] = ["mock", "stripe"];
+const MOCK_PAYMENT_FLOWS: readonly MockPaymentFlow[] = ["instant", "manual"];
+const BOOLEANS = ["true", "false"] as const;
 
 const DEV_CORS_ORIGINS = [
   "http://localhost:5173",
@@ -128,6 +144,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     problems.push("STRIPE_SECRET_KEY is required when PAYMENT_PROVIDER_TYPE=stripe");
   }
 
+  const adminApiToken = env.ADMIN_API_TOKEN?.trim() || undefined;
+  if (adminApiToken && adminApiToken.length < 32) {
+    problems.push("ADMIN_API_TOKEN must be at least 32 characters (e.g. `openssl rand -hex 32`)");
+  }
+
   const config: AppConfig = {
     nodeEnv,
     isProduction,
@@ -135,9 +156,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     databaseUrl,
     corsOrigins,
     guestAppUrl,
+    rateLimitEnabled: oneOf(problems, "RATE_LIMIT_ENABLED", env.RATE_LIMIT_ENABLED, BOOLEANS, "true") === "true",
     rateLimitPerMinute: positiveInt(problems, "RATE_LIMIT_PER_MINUTE", env.RATE_LIMIT_PER_MINUTE, 300),
+    paymentHoldMinutes: positiveInt(problems, "PAYMENT_HOLD_MINUTES", env.PAYMENT_HOLD_MINUTES, 10),
+    backgroundJobs: oneOf(problems, "BACKGROUND_JOBS", env.BACKGROUND_JOBS, BOOLEANS, "true") === "true",
+    adminApiToken,
     posConnectorType: oneOf(problems, "POS_CONNECTOR_TYPE", env.POS_CONNECTOR_TYPE, POS_CONNECTOR_TYPES, "mock"),
     paymentProviderType,
+    mockPaymentFlow: oneOf(problems, "MOCK_PAYMENT_FLOW", env.MOCK_PAYMENT_FLOW, MOCK_PAYMENT_FLOWS, "instant"),
     stripe: {
       secretKey: stripeSecretKey,
       webhookSecret: env.STRIPE_WEBHOOK_SECRET?.trim() || undefined,

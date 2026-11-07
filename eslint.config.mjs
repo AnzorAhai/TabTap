@@ -4,7 +4,12 @@ import reactHooks from "eslint-plugin-react-hooks";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
-const sourceFiles = ["apps/*/src/**/*.{ts,tsx}", "apps/*/test/**/*.ts", "packages/*/src/**/*.ts"];
+const sourceFiles = [
+  "apps/*/src/**/*.{ts,tsx}",
+  "apps/*/test/**/*.ts",
+  "packages/*/src/**/*.ts",
+  "packages/*/test/**/*.ts",
+];
 
 export default tseslint.config(
   {

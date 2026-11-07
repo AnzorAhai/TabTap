@@ -12,15 +12,12 @@ async function main() {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await client.query("DELETE FROM receipts");
+    // Receipts and POS sync jobs go with their payments (ON DELETE CASCADE).
     await client.query("DELETE FROM payments");
-    await client.query("DELETE FROM split_participants");
-    await client.query("DELETE FROM splits");
-    await client.query("UPDATE bills SET paid_minor = 0, status = 'open'");
+    await client.query("DELETE FROM equal_splits");
+    await client.query("UPDATE bills SET paid_minor = 0, status = 'open', updated_at = now()");
     await client.query("COMMIT");
-    console.log("Test data cleared, bills reset to open/unpaid.");
-    // The mock POS keeps its bills in API process memory and would re-sync them as paid.
-    console.log("Restart the API as well so the mock POS starts from unpaid bills again.");
+    console.log("Payments and equal splits deleted, bills reopened as unpaid.");
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;

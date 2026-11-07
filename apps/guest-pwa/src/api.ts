@@ -1,59 +1,69 @@
-import type { Bill, Payment, ReceiptView, Split } from "@tabtap/shared";
+import type { CreatePaymentRequest, PaymentView, ReceiptView, TableBillView } from "@tabtap/shared";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
+const API_URL = (import.meta.env.VITE_API_URL ?? "http://localhost:3000").replace(/\/+$/, "");
+
+export class ApiError extends Error {
+  constructor(
+    /** HTTP status; 0 when the request never got a response (offline, DNS, CORS). */
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
-  });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`${res.status} ${res.statusText}: ${body}`);
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      ...init,
+      headers: { "Content-Type": "application/json", ...init?.headers },
+    });
+  } catch {
+    throw new ApiError(0, "Нет связи с сервером. Проверьте интернет и попробуйте ещё раз.");
   }
-  return res.json() as Promise<T>;
+  if (!res.ok) {
+    let message = res.statusText;
+    try {
+      const body = (await res.json()) as { message?: string | string[] };
+      if (body.message) message = Array.isArray(body.message) ? body.message.join("; ") : body.message;
+    } catch {
+      // not JSON — keep the status text
+    }
+    throw new ApiError(res.status, message);
+  }
+  return (await res.json()) as T;
 }
 
-export function getBillForTable(tableId: string): Promise<Bill> {
-  return request(`/tables/${tableId}/bill`);
-}
+export const api = {
+  tableBill: (qrToken: string) => request<TableBillView>(`/tables/${encodeURIComponent(qrToken)}/bill`),
 
-export function createSplit(billId: string, participantsCount: number): Promise<Split> {
-  return request(`/bills/${billId}/splits`, {
-    method: "POST",
-    body: JSON.stringify({ participantsCount }),
-  });
-}
+  setEqualSplit: (billId: string, shareCount: number) =>
+    request<TableBillView>(`/bills/${billId}/equal-split`, { method: "PUT", body: JSON.stringify({ shareCount }) }),
 
-export function getSplit(splitId: string): Promise<Split> {
-  return request(`/splits/${splitId}`);
-}
+  removeEqualSplit: (billId: string) => request<TableBillView>(`/bills/${billId}/equal-split`, { method: "DELETE" }),
 
-export function getItemsSplit(billId: string): Promise<Split> {
-  return request(`/bills/${billId}/items-split`);
-}
+  /** `idempotencyKey` must stay the same when retrying the same "Pay" tap. */
+  createPayment: (billId: string, body: CreatePaymentRequest, idempotencyKey: string) =>
+    request<PaymentView>(`/bills/${billId}/payments`, {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: { "Idempotency-Key": idempotencyKey },
+    }),
 
-export function payForItems(billId: string, itemIds: string[]): Promise<{ split: Split; participantId: string }> {
-  return request(`/bills/${billId}/items-split`, {
-    method: "POST",
-    body: JSON.stringify({ itemIds }),
-  });
-}
+  payment: (paymentId: string) => request<PaymentView>(`/payments/${paymentId}`),
 
-export function createPayment(input: {
-  billId: string;
-  splitId: string;
-  participantId: string;
-  amountMinor: number;
-  currency: string;
-  tipMinor?: number;
-}): Promise<Payment> {
-  return request(`/payments`, {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
-}
+  cancelPayment: (paymentId: string) => request<PaymentView>(`/payments/${paymentId}/cancel`, { method: "POST" }),
 
-export function getReceipt(paymentId: string): Promise<ReceiptView> {
-  return request(`/payments/${paymentId}/receipt`);
-}
+  /** Demo gateway only: stands in for the guest confirming in their banking app. */
+  mockConfirm: (paymentId: string, outcome: "succeeded" | "failed") =>
+    request<PaymentView>(`/payments/${paymentId}/mock-confirm`, {
+      method: "POST",
+      body: JSON.stringify({ outcome }),
+    }),
+
+  receipt: (paymentId: string) => request<ReceiptView>(`/payments/${paymentId}/receipt`),
+
+  eventsUrl: (billId: string) => `${API_URL}/bills/${billId}/events`,
+};
