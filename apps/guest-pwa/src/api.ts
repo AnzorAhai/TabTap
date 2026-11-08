@@ -21,7 +21,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       headers: { "Content-Type": "application/json", ...init?.headers },
     });
   } catch {
-    throw new ApiError(0, "Нет связи с сервером. Проверьте интернет и попробуйте ещё раз.");
+    throw new ApiError(0, "Network error");
   }
   if (!res.ok) {
     let message = res.statusText;

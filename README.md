@@ -66,6 +66,14 @@ verification APIs, Binance Pay) plug in per bank once there is a partner.
 Restaurants with rate source **BCV** get the official USD→VES rate from `BCV_RATE_URL` (DolarAPI
 format) every hour; staff can also take it on demand or enter a rate by hand.
 
+## Refunds
+
+Owners and managers can refund a completed payment from the Payments page. Card payments go back
+through the gateway; offline money is returned by staff, and the refund records who did it and why.
+A refunded payment stops counting towards sales and the platform fee, and what it covered becomes
+payable again unless the POS has closed the bill. The POS is not told: voiding at the register stays
+with the restaurant.
+
 ## Staff access
 
 The admin panel needs a sign-in (email + password). Each person has a role per restaurant:
@@ -180,5 +188,6 @@ ones:
    with the variables above and the new `DATABASE_URL`. Migrations and demo data are applied on
    its first start.
 3. Point `VITE_API_URL` of both Vercel projects at the new API URL, update `connect-src` in
-   `apps/admin/vercel.json` (the admin panel's Content-Security-Policy) and redeploy both.
+   `apps/admin/vercel.json` and `apps/guest-pwa/vercel.json` (their Content-Security-Policy) and
+   redeploy both.
 4. Delete the old Blueprint, Render service and Supabase project.

@@ -1,16 +1,18 @@
 import type { MeView, SessionView, TenantSettingsView } from "@tabtap/shared";
 import { useCallback, useEffect, useState } from "react";
-import { api, hasSession, onSessionExpired, setSession } from "./api";
+import { api, ApiError, hasSession, onSessionExpired, setSession } from "./api";
 import { InvitePage, LoginPage } from "./AuthPages";
+import { useI18n } from "./i18n";
 import { FeesSection, PaymentMethodsSection } from "./PaymentSettings";
-import { PaymentsSection, RatesSection, SettingsSection, TablesSection } from "./RestaurantSections";
+import { PaymentsPage } from "./PaymentsPage";
+import { RatesSection, SettingsSection } from "./RestaurantSettings";
+import { TablesPage } from "./TablesPage";
 import { PlatformSection, StaffSection } from "./TeamSections";
-import { ErrorText, messageOf, ROLE_LABEL } from "./ui";
-
-// Functional admin panel for Phase 2; visual design and translations come in Phase 4.
+import { TodayPage } from "./TodayPage";
+import { ErrorText, LanguagePicker, Logo } from "./ui";
 
 const TENANT_KEY = "tabtap.admin.tenant";
-type Tab = "tables" | "payments" | "methods" | "rates" | "fees" | "settings" | "staff" | "platform";
+type Page = "today" | "tables" | "payments" | "methods" | "rates" | "fees" | "settings" | "staff" | "platform";
 
 function storedTenant(): string | null {
   try {
@@ -21,10 +23,11 @@ function storedTenant(): string | null {
 }
 
 export default function App() {
+  const { t } = useI18n();
   const inviteToken = window.location.pathname.match(/^\/invite\/([A-Za-z0-9_-]+)$/)?.[1];
   const [me, setMe] = useState<MeView | null>(null);
   const [checking, setChecking] = useState(hasSession());
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
 
   const signedIn = useCallback((session: SessionView) => {
     setSession(session);
@@ -37,12 +40,20 @@ export default function App() {
     api
       .me()
       .then(setMe)
-      .catch((e: unknown) => setError(messageOf(e)))
+      .catch((e: unknown) => setError(e))
       .finally(() => setChecking(false));
   }, [inviteToken]);
 
   if (inviteToken && !me) return <InvitePage token={inviteToken} onSignedIn={signedIn} />;
-  if (checking && !me && !error) return <main className="screen">Загружаем…</main>;
+  if (checking && !me && !error) return <main className="centered">{t.loading}</main>;
+  // A session we couldn't check (server unreachable) isn't a signed-out session.
+  if (!me && error instanceof ApiError && error.status === 0) {
+    return (
+      <main className="centered">
+        <ErrorText error={error} />
+      </main>
+    );
+  }
   if (!me) return <LoginPage onSignedIn={signedIn} />;
   return (
     <Dashboard
@@ -57,13 +68,14 @@ export default function App() {
 }
 
 function Dashboard({ me, onSignOut }: { me: MeView; onSignOut: () => void }) {
+  const { t } = useI18n();
   // Platform admins can open any restaurant; everyone else picks among their own.
   const [tenants, setTenants] = useState(me.memberships.map((m) => ({ id: m.tenantId, name: m.tenantName })));
   const reloadTenants = useCallback(() => {
     if (!me.isPlatformAdmin) return;
     api
       .platformTenants()
-      .then((list) => setTenants(list.map((t) => ({ id: t.id, name: t.name }))))
+      .then((list) => setTenants(list.map((x) => ({ id: x.id, name: x.name }))))
       .catch(() => undefined);
   }, [me.isPlatformAdmin]);
   useEffect(reloadTenants, [reloadTenants]);
@@ -75,8 +87,8 @@ function Dashboard({ me, onSignOut }: { me: MeView; onSignOut: () => void }) {
       : (me.memberships[0]?.tenantId ?? null);
   });
   const [settings, setSettings] = useState<TenantSettingsView | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>(me.memberships.length === 0 && me.isPlatformAdmin ? "platform" : "tables");
+  const [error, setError] = useState<unknown>(null);
+  const [page, setPage] = useState<Page>(me.memberships.length === 0 && me.isPlatformAdmin ? "platform" : "today");
 
   // A platform admin without memberships starts with no restaurant: show the first one.
   const tenantId = chosenTenantId ?? tenants[0]?.id ?? null;
@@ -91,69 +103,101 @@ function Dashboard({ me, onSignOut }: { me: MeView; onSignOut: () => void }) {
     let cancelled = false;
     api
       .settings(tenantId)
-      .then((s) => !cancelled && (setSettings(s), setError(null)))
-      .catch((e: unknown) => !cancelled && setError(messageOf(e)));
+      .then((s) => {
+        if (!cancelled) {
+          setSettings(s);
+          setError(null);
+        }
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(e);
+      });
     return () => {
       cancelled = true;
     };
   }, [tenantId]);
 
   const role = settings?.role;
-  const tabs: [Tab, string][] = [
-    ["tables", "Столы"],
-    ["payments", "Платежи"],
-    ["methods", "Способы оплаты"],
-    ["rates", "Курс"],
-    ["settings", "Настройки"],
+  const managing = role === "owner" || role === "manager";
+  const pages: Page[] = [
+    "today",
+    "tables",
+    "payments",
+    "methods",
+    "rates",
+    ...(managing ? (["fees", "staff"] as Page[]) : []),
+    "settings",
+    ...(me.isPlatformAdmin ? (["platform"] as Page[]) : []),
   ];
-  if (role === "owner" || role === "manager") tabs.push(["fees", "Комиссия"], ["staff", "Сотрудники"]);
-  if (me.isPlatformAdmin) tabs.push(["platform", "Платформа"]);
 
   return (
-    <main className="screen">
-      <header className="topbar">
-        <h1>TabTap</h1>
-        {tenants.length > 0 && (
-          <select value={tenantId ?? ""} onChange={(e) => setTenantId(e.target.value)}>
-            {tenants.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
+    <div className="shell">
+      <aside className="sidebar no-print">
+        <div className="sidebar-brand">
+          <Logo size={30} />
+          <strong>TabTap</strong>
+        </div>
+        {tenants.length > 1 ? (
+          <select
+            aria-label={t.restaurantLabel}
+            value={tenantId ?? ""}
+            onChange={(e) => {
+              setSettings(null);
+              setTenantId(e.target.value);
+            }}
+          >
+            {tenants.map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.name}
               </option>
             ))}
           </select>
+        ) : (
+          <div className="sidebar-tenant">{tenants[0]?.name}</div>
         )}
-        <span className="muted">
-          {me.email}
-          {role && ` · ${ROLE_LABEL[role]}`}
-          {me.isPlatformAdmin && " · платформа"}
-        </span>
-        <button type="button" className="link" onClick={onSignOut}>
-          Выйти
-        </button>
-      </header>
-
-      <nav className="mode-tabs">
-        {tabs.map(([key, label]) => (
-          <button key={key} className={tab === key ? "tab tab-active" : "tab"} onClick={() => setTab(key)}>
-            {label}
+        <nav>
+          {pages.map((key) => (
+            <button
+              key={key}
+              type="button"
+              className={page === key ? "nav-item nav-item-on" : "nav-item"}
+              aria-current={page === key ? "page" : undefined}
+              onClick={() => setPage(key)}
+            >
+              {t.nav[key]}
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-foot">
+          <LanguagePicker />
+          <div className="muted small user-line">
+            {me.email}
+            {role && ` · ${t.role[role]}`}
+            {me.isPlatformAdmin && ` · ${t.platformBadge}`}
+          </div>
+          <button type="button" className="link" onClick={onSignOut}>
+            {t.signOut}
           </button>
-        ))}
-      </nav>
+        </div>
+      </aside>
 
-      <ErrorText error={error} />
-      {!tenantId && tab !== "platform" && <p>Вы пока не привязаны ни к одному ресторану.</p>}
-      {tenantId && settings && role && (
-        <>
-          {tab === "tables" && <TablesSection tenantId={tenantId} role={role} />}
-          {tab === "payments" && <PaymentsSection tenantId={tenantId} />}
-          {tab === "methods" && <PaymentMethodsSection tenantId={tenantId} role={role} />}
-          {tab === "rates" && <RatesSection tenantId={tenantId} settings={settings} />}
-          {tab === "fees" && <FeesSection tenantId={tenantId} />}
-          {tab === "settings" && <SettingsSection key={settings.id} settings={settings} onSaved={setSettings} />}
-          {tab === "staff" && <StaffSection tenantId={tenantId} role={role} myUserId={me.userId} />}
-        </>
-      )}
-      {tab === "platform" && me.isPlatformAdmin && <PlatformSection onTenantsChanged={reloadTenants} />}
-    </main>
+      <main className="content">
+        <ErrorText error={error} />
+        {!tenantId && page !== "platform" && <p>{t.noRestaurant}</p>}
+        {tenantId && settings && role && (
+          <>
+            {page === "today" && <TodayPage tenantId={tenantId} role={role} />}
+            {page === "tables" && <TablesPage tenantId={tenantId} role={role} restaurantName={settings.name} />}
+            {page === "payments" && <PaymentsPage tenantId={tenantId} role={role} />}
+            {page === "methods" && <PaymentMethodsSection tenantId={tenantId} role={role} />}
+            {page === "rates" && <RatesSection tenantId={tenantId} settings={settings} />}
+            {page === "fees" && <FeesSection tenantId={tenantId} />}
+            {page === "settings" && <SettingsSection key={settings.id} settings={settings} onSaved={setSettings} />}
+            {page === "staff" && <StaffSection tenantId={tenantId} role={role} myUserId={me.userId} />}
+          </>
+        )}
+        {page === "platform" && me.isPlatformAdmin && <PlatformSection onTenantsChanged={reloadTenants} />}
+      </main>
+    </div>
   );
 }

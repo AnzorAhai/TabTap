@@ -41,6 +41,8 @@ export interface PaymentMethodOption {
   /** Extra charge on top (e.g. IGTF 3% = 300), in basis points of the converted amount. */
   surchargeBps: number;
   flow: PaymentFlow;
+  /** How long a payment with this method holds its items/shares before they are released. */
+  holdMinutes: number;
 }
 
 export interface BillView {
@@ -72,8 +74,6 @@ export interface TableBillView {
   /** Methods the guest can pay with right now (those needing a missing exchange rate are left out). */
   paymentMethods: PaymentMethodOption[];
   tipPercentOptions: number[];
-  /** How long a started payment holds its items/shares before they are released. */
-  holdMinutes: number;
 }
 
 /** POST /bills/:billId/payments — the server computes every amount from this. */
@@ -149,7 +149,11 @@ export interface ReceiptView {
   currency: string;
   chargeAmountMinor: number;
   chargeCurrency: string;
+  /** Included in chargeAmountMinor (charge currency), e.g. IGTF. */
+  surchargeMinor: number;
+  surchargeBps: number;
   exchangeRate: string | null;
+  method: PaymentMethod;
   paidAt: string;
 }
 
@@ -198,13 +202,67 @@ export interface AdminPaymentView {
   chargeAmountMinor: number;
   chargeCurrency: string;
   surchargeMinor: number;
+  exchangeRate: string | null;
   method: PaymentMethod;
   status: PaymentStatus;
   /** What the guest reported for an offline payment (reference, payer phone/bank/name). */
   proof: Record<string, string> | null;
   /** Pending, and needs a staff member to confirm or reject it. */
   awaitingReview: boolean;
+  failureReason: string | null;
   createdAt: string;
+  settledAt: string | null;
+  refundedAt: string | null;
+  refundReason: string | null;
+}
+
+/** GET /tenants/:tenantId/payments — dates are days in the restaurant's time zone, inclusive. */
+export interface PaymentsQuery {
+  /** YYYY-MM-DD */
+  from?: string;
+  to?: string;
+  status?: PaymentStatus;
+  method?: PaymentMethod;
+  limit?: number;
+  offset?: number;
+}
+
+/** POST /tenants/:tenantId/payments/:paymentId/refund */
+export interface RefundPaymentRequest {
+  reason?: string;
+}
+
+/** Money settled during one day in the restaurant's time zone. Refunded payments are left out. */
+export interface DailySummaryView {
+  /** YYYY-MM-DD */
+  date: string;
+  timeZone: string;
+  /** Per bill currency. */
+  totals: { currency: string; payments: number; amountMinor: number; tipMinor: number; feeMinor: number }[];
+  /** What actually came in, per method and the currency it was paid in. */
+  byMethod: { method: PaymentMethod; chargeCurrency: string; payments: number; chargeAmountMinor: number }[];
+  /** Refunds made that day, per bill currency. */
+  refunds: { currency: string; payments: number; amountMinor: number }[];
+}
+
+/** A table as staff see it right now: its current bill as TabTap knows it (guests have opened it). */
+export interface LiveTableView {
+  tableId: string;
+  label: string;
+  isActive: boolean;
+  bill: {
+    id: string;
+    status: BillStatus;
+    currency: string;
+    totalMinor: number;
+    paidMinor: number;
+    /** Held by payments still in progress. */
+    reservedMinor: number;
+    remainingMinor: number;
+    /** Payments waiting for a staff member to confirm them. */
+    awaitingReview: number;
+    updatedAt: string;
+  } | null;
 }
 
 /** POST /tenants/:tenantId/payments/:paymentId/reject */

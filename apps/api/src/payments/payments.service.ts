@@ -212,6 +212,42 @@ export class PaymentsService {
   }
 
   /**
+   * Gives a settled payment back. What it covered becomes payable again (unless the POS
+   * has closed the bill) and it stops counting towards revenue and the platform fee.
+   * The POS is not told: voiding at the register stays with the restaurant.
+   * Offline money is returned by staff themselves; this records that they did.
+   */
+  async refund(tenantId: string, paymentId: string, userId: string, reason?: string): Promise<PaymentView> {
+    const payment = await this.payments.findById(paymentId);
+    if (payment.tenantId !== tenantId) throw new NotFoundException(`Payment ${paymentId} not found`);
+    if (payment.status === PaymentStatus.REFUNDED) return this.view(payment);
+    if (payment.status !== PaymentStatus.SUCCEEDED) {
+      throw new ConflictException("Only completed payments can be refunded");
+    }
+
+    // The gateway goes first: if it refuses, nothing has changed here.
+    if (payment.provider !== OFFLINE_PROVIDER && payment.providerRef) {
+      try {
+        await this.provider.refund(payment.providerRef);
+      } catch (err) {
+        this.logger.error(`Refund of payment ${paymentId} failed`, err instanceof Error ? err.stack : err);
+        throw new BadGatewayException("The payment provider couldn't make the refund. Nothing has changed.");
+      }
+    }
+
+    const { refunded, changed } = await withTransaction(this.pool, async (db) => {
+      await this.bills.lockById(db, payment.billId); // same lock order as settle: bill, then payment
+      const current = await this.payments.lockById(db, paymentId);
+      if (current.status !== PaymentStatus.SUCCEEDED) return { refunded: current, changed: false };
+      const updated = await this.payments.markRefunded(db, paymentId, userId, reason?.trim() || null);
+      await this.bills.changePaid(db, payment.billId, -updated.amountMinor);
+      return { refunded: updated, changed: true };
+    });
+    if (changed) this.events.emit(refunded.billId);
+    return this.view(refunded);
+  }
+
+  /**
    * Demo stand-in for a bank's transfer check: references ending in "0000" are "not
    * found", anything else is confirmed. Real bank APIs replace this per restaurant.
    */
@@ -301,7 +337,7 @@ export class PaymentsService {
         this.logger.warn(`Payment ${paymentId} succeeded after it was ${current.status}; recording it anyway`);
       }
       const settled = await this.payments.markSucceeded(db, paymentId);
-      await this.bills.addPaid(db, billId, settled.amountMinor);
+      await this.bills.changePaid(db, billId, settled.amountMinor);
       await this.receipts.createForPayment(db, settled.tenantId, paymentId);
       await this.posSync.enqueueMarkPaid(db, settled.tenantId, billId, paymentId);
       return { payment: settled, changed: true };

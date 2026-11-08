@@ -1,5 +1,5 @@
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
-import type { BillItem, BillStatus } from "@tabtap/shared";
+import type { BillItem, BillStatus, LiveTableView } from "@tabtap/shared";
 import { Pool } from "pg";
 import { DB_POOL } from "../database/database.module";
 import type { Queryable } from "../database/transaction";
@@ -67,19 +67,59 @@ export class BillsRepository {
     return mapBill(rows[0]);
   }
 
-  async addPaid(db: Queryable, billId: string, amountMinor: number): Promise<void> {
+  /** Records money settled on the bill, or (negative) refunded from it. */
+  async changePaid(db: Queryable, billId: string, deltaMinor: number): Promise<void> {
     await db.query(
       `UPDATE bills SET
          paid_minor = paid_minor + $2,
          status = CASE
            WHEN pos_status = 'closed' THEN 'closed'
+           WHEN paid_minor + $2 <= 0 THEN 'open'
            WHEN paid_minor + $2 >= total_minor THEN 'paid'
            ELSE 'partially_paid'
          END,
          updated_at = now()
        WHERE id = $1`,
-      [billId, amountMinor],
+      [billId, deltaMinor],
     );
+  }
+
+  /** Every table of a restaurant with its current bill, for the staff's live view. */
+  async listLive(tenantId: string): Promise<LiveTableView[]> {
+    const { rows } = await this.pool.query(
+      `SELECT t.id AS table_id, t.label, t.is_active,
+              b.id AS bill_id, b.status, b.currency, b.total_minor, b.paid_minor, b.updated_at,
+              COALESCE(held.reserved, 0) AS reserved, COALESCE(held.awaiting, 0)::int AS awaiting
+       FROM tables t
+       LEFT JOIN LATERAL (
+         SELECT * FROM bills WHERE table_id = t.id AND pos_status = 'open' ORDER BY created_at DESC LIMIT 1
+       ) b ON true
+       LEFT JOIN LATERAL (
+         SELECT sum(amount_minor) AS reserved, count(*) FILTER (WHERE provider = 'offline') AS awaiting
+         FROM payments WHERE bill_id = b.id AND status = 'pending' AND expires_at > now()
+       ) held ON true
+       WHERE t.tenant_id = $1
+       ORDER BY t.created_at, t.id`,
+      [tenantId],
+    );
+    return rows.map((r) => ({
+      tableId: r.table_id,
+      label: r.label,
+      isActive: r.is_active,
+      bill: r.bill_id
+        ? {
+            id: r.bill_id,
+            status: r.status as BillStatus,
+            currency: r.currency,
+            totalMinor: Number(r.total_minor),
+            paidMinor: Number(r.paid_minor),
+            reservedMinor: Number(r.reserved),
+            remainingMinor: Math.max(0, Number(r.total_minor) - Number(r.paid_minor) - Number(r.reserved)),
+            awaitingReview: r.awaiting,
+            updatedAt: (r.updated_at as Date).toISOString(),
+          }
+        : null,
+    }));
   }
 }
 

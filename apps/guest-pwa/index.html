@@ -1,12 +1,58 @@
 <!doctype html>
-<html lang="ru">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>TabTap — оплата счёта</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>TabTap</title>
+    <meta name="description" content="Paga tu cuenta del restaurante desde el teléfono." />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f6f3ec" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f1513" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <style>
+      /* Shown at once while the app downloads on a slow connection. */
+      body {
+        margin: 0;
+        background: #f6f3ec;
+      }
+      .boot {
+        display: grid;
+        height: 100vh;
+        place-items: center;
+      }
+      .boot svg {
+        animation: boot 1.2s ease-in-out infinite alternate;
+      }
+      @keyframes boot {
+        to {
+          opacity: 0.5;
+        }
+      }
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: #0f1513;
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="boot">
+        <svg width="64" height="64" viewBox="0 0 48 48" aria-label="TabTap">
+          <rect width="48" height="48" rx="12" fill="#123f36" />
+          <path d="M14 10h20v28l-3.33-2.6L27.33 38 24 35.4 20.67 38l-3.34-2.6L14 38z" fill="#f5b301" />
+          <path
+            d="M19 23l3.6 3.6 6.4-7"
+            fill="none"
+            stroke="#123f36"
+            stroke-width="3"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -65,6 +65,9 @@ export interface PaymentRecord {
   proof: Record<string, string> | null;
   proofSubmittedAt: Date | null;
   reviewedBy: string | null;
+  refundedAt: Date | null;
+  refundedBy: string | null;
+  refundReason: string | null;
   /** "offline" for methods confirmed by staff or proof, else the gateway's type. */
   provider: string;
   providerRef: string | null;
