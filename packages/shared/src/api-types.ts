@@ -1,7 +1,7 @@
 // Request and response shapes of the HTTP API, shared by the backend and the frontends.
 // Money is always in minor units; `currency` fields are ISO 4217 codes.
 
-import type { BillStatus, ClaimState, PaymentMode, PaymentStatus } from "./status.js";
+import type { BillStatus, ClaimState, PaymentFlow, PaymentMethod, PaymentMode, PaymentStatus } from "./status.js";
 
 export interface BillItemView {
   id: string;
@@ -30,11 +30,17 @@ export interface EqualSplitView {
   shares: EqualSplitShareView[];
 }
 
-export interface PaymentCurrencyOption {
+/** A way to pay that the restaurant accepts, as offered to the guest. */
+export interface PaymentMethodOption {
+  method: PaymentMethod;
+  /** Currency the guest pays in with this method. */
   currency: string;
-  /** Units of this currency per one unit of the bill currency; null for the bill currency itself. */
+  /** Units of this currency per one unit of the bill currency; null when it is the bill currency. */
   rate: string | null;
   rateEffectiveAt: string | null;
+  /** Extra charge on top (e.g. IGTF 3% = 300), in basis points of the converted amount. */
+  surchargeBps: number;
+  flow: PaymentFlow;
 }
 
 export interface BillView {
@@ -63,7 +69,8 @@ export interface TableBillView {
   equalSplit: EqualSplitView | null;
   /** Which payment modes can be started right now. */
   modes: Record<PaymentMode, boolean>;
-  paymentCurrencies: PaymentCurrencyOption[];
+  /** Methods the guest can pay with right now (those needing a missing exchange rate are left out). */
+  paymentMethods: PaymentMethodOption[];
   tipPercentOptions: number[];
   /** How long a started payment holds its items/shares before they are released. */
   holdMinutes: number;
@@ -78,8 +85,17 @@ export interface CreatePaymentRequest {
   shareCount?: number;
   /** Tip as a percentage of the amount paid (bill currency). Defaults to 0. */
   tipPercent?: number;
-  /** Currency to pay in: the bill currency or one listed in `paymentCurrencies`. */
-  currency: string;
+  /** One of the methods listed in `paymentMethods`; it decides the currency. */
+  method: PaymentMethod;
+}
+
+/** POST /payments/:paymentId/proof — what the guest reports after paying outside TabTap. */
+export interface SubmitProofRequest {
+  /** Bank reference / Zelle confirmation / Binance order id. */
+  reference: string;
+  payerPhone?: string;
+  payerBank?: string;
+  payerName?: string;
 }
 
 export interface PaymentView {
@@ -91,11 +107,19 @@ export interface PaymentView {
   amountMinor: number;
   tipMinor: number;
   currency: string;
-  /** What the guest is charged: (amount + tip) converted to the payment currency. */
+  /** What the guest is charged: (amount + tip) converted to the payment currency, plus the surcharge. */
   chargeAmountMinor: number;
   chargeCurrency: string;
+  /** Included in chargeAmountMinor (charge currency), e.g. IGTF. */
+  surchargeMinor: number;
   /** Units of chargeCurrency per unit of currency; null when no conversion. */
   exchangeRate: string | null;
+  method: PaymentMethod;
+  flow: PaymentFlow;
+  /** For "proof" and "staff" methods: where/how to pay (bank, phone, RIF, email, …). */
+  payTo: Record<string, string> | null;
+  /** The guest has reported the payment; it now waits for verification. */
+  proofSubmitted: boolean;
   itemIds: string[] | null;
   shareIndices: number[] | null;
   /** When the hold on items/shares ends if the payment is still pending. */
@@ -173,8 +197,50 @@ export interface AdminPaymentView {
   currency: string;
   chargeAmountMinor: number;
   chargeCurrency: string;
+  surchargeMinor: number;
+  method: PaymentMethod;
   status: PaymentStatus;
+  /** What the guest reported for an offline payment (reference, payer phone/bank/name). */
+  proof: Record<string, string> | null;
+  /** Pending, and needs a staff member to confirm or reject it. */
+  awaitingReview: boolean;
   createdAt: string;
+}
+
+/** POST /tenants/:tenantId/payments/:paymentId/reject */
+export interface RejectPaymentRequest {
+  reason?: string;
+}
+
+/** A restaurant's configuration of one payment method. */
+export interface TenantPaymentMethodView {
+  method: PaymentMethod;
+  enabled: boolean;
+  surchargeBps: number;
+  /** Payee details shown to guests, plus `verification`: "staff" | "simulated". */
+  details: Record<string, string>;
+  sortOrder: number;
+}
+
+/** PUT /tenants/:tenantId/payment-methods — the full list replaces the current one. */
+export interface UpdatePaymentMethodsRequest {
+  methods: TenantPaymentMethodView[];
+}
+
+/** Platform fees accrued in a calendar month (UTC), per currency — invoiced to the restaurant. */
+export interface FeeReportRow {
+  tenantId: string;
+  tenantName: string;
+  currency: string;
+  payments: number;
+  billAmountMinor: number;
+  feeMinor: number;
+}
+
+export interface FeeReportView {
+  /** "YYYY-MM" */
+  month: string;
+  rows: FeeReportRow[];
 }
 
 export interface ExchangeRateView {
@@ -254,8 +320,9 @@ export interface TenantSettingsView {
   defaultCurrency: string;
   status: "active" | "suspended";
   platformFeeBps: number;
-  paymentCurrencies: string[];
   tipPercentOptions: number[];
+  /** "bcv": the official BCV USD→VES rate is fetched automatically; "manual": entered by staff. */
+  rateSource: "manual" | "bcv";
   /** The caller's role here; platform admins act as owners. */
   role: StaffRole;
 }
@@ -263,8 +330,8 @@ export interface TenantSettingsView {
 /** PATCH /tenants/:tenantId/settings */
 export interface UpdateTenantSettingsRequest {
   name?: string;
-  paymentCurrencies?: string[];
   tipPercentOptions?: number[];
+  rateSource?: "manual" | "bcv";
 }
 
 export interface VenueView {

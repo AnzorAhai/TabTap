@@ -1,7 +1,8 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from "@nestjs/common";
 import type {
   CreateTenantRequest,
   CreateTenantResult,
+  FeeReportView,
   InviteLinkView,
   PlatformTenantView,
   UpdatePlatformTenantRequest,
@@ -21,6 +22,7 @@ import {
 } from "class-validator";
 import type { AuthContext } from "../auth/auth.service";
 import { CurrentAuth, PlatformAdmin } from "../auth/staff.guard";
+import { currentMonth } from "./months";
 import { PlatformService } from "./platform.service";
 import { IsTimeZone } from "./restaurant.controller";
 import { ParseIdPipe } from "../common/ids";
@@ -89,6 +91,12 @@ export class PlatformController {
     @Body() dto: UpdatePlatformTenantDto,
   ): Promise<PlatformTenantView> {
     return this.platform.updateTenant(tenantId, dto);
+  }
+
+  /** Platform fees accrued per restaurant in a month (default: this month) — for invoicing. */
+  @Get("fees")
+  fees(@Query("month") month?: string): Promise<FeeReportView> {
+    return this.platform.feeReport(month ?? currentMonth());
   }
 
   /** A link to set a new password, for someone who lost theirs. */

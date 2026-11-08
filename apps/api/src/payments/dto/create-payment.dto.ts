@@ -1,4 +1,4 @@
-import { PaymentMode, type CreatePaymentRequest } from "@tabtap/shared";
+import { PaymentMethod, PaymentMode, type CreatePaymentRequest, type SubmitProofRequest } from "@tabtap/shared";
 import {
   ArrayMaxSize,
   ArrayNotEmpty,
@@ -41,8 +41,28 @@ export class CreatePaymentDto implements CreatePaymentRequest {
   @Max(100)
   tipPercent?: number;
 
-  @Matches(/^[A-Za-z]{3}$/, { message: "currency must be a 3-letter ISO 4217 code" })
-  currency!: string;
+  @IsIn(Object.values(PaymentMethod))
+  method!: PaymentMethod;
+}
+
+export class SubmitProofDto implements SubmitProofRequest {
+  /** Bank reference, Zelle confirmation or Binance order id. */
+  @Matches(/^[A-Za-z0-9-]{4,40}$/, { message: "reference must be 4-40 letters, digits or dashes" })
+  reference!: string;
+
+  @IsOptional()
+  @Matches(/^[0-9+-s()]{7,20}$/, { message: "payerPhone must be a phone number" })
+  payerPhone?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  payerBank?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  payerName?: string;
 }
 
 export class MockConfirmDto {

@@ -1,4 +1,4 @@
-import { formatMoney as formatMinor, type InviteLinkView, type StaffRole } from "@tabtap/shared";
+import { formatMoney as formatMinor, type InviteLinkView, type PaymentMethod, type StaffRole } from "@tabtap/shared";
 import { useCallback, useEffect, useState } from "react";
 
 export const LOCALE = "ru-RU";
@@ -8,6 +8,19 @@ export const ROLE_LABEL: Record<StaffRole, string> = {
   manager: "Менеджер",
   waiter: "Официант",
 };
+
+export const METHOD_LABEL: Record<PaymentMethod, string> = {
+  card: "Карта",
+  pago_movil: "Pago Móvil",
+  zelle: "Zelle",
+  binance_pay: "Binance Pay",
+  cash_usd: "Наличные USD",
+  cash_ves: "Наличные Bs",
+};
+
+export function currentMonth(): string {
+  return new Date().toISOString().slice(0, 7);
+}
 
 export function formatMoney(minor: number, currency: string): string {
   return formatMinor(minor, currency, LOCALE);

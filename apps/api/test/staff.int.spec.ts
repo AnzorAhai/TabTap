@@ -231,12 +231,12 @@ describe("restaurant management", () => {
       .http()
       .patch(url)
       .set(bearer(manager))
-      .send({ name: "Hacked", tipPercentOptions: [15, 0, 10, 10], paymentCurrencies: ["VES", "USD"] })
+      .send({ name: "Hacked", tipPercentOptions: [15, 0, 10, 10], rateSource: "manual" })
       .expect(200);
     expect(res.body).toMatchObject({
       name: "Demo Restaurant",
       tipPercentOptions: [0, 10, 15],
-      paymentCurrencies: ["VES"],
+      rateSource: "manual",
       role: "manager",
     });
     await t

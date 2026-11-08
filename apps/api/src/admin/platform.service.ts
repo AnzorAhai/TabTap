@@ -1,7 +1,10 @@
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
-import type { CreateTenantResult, InviteLinkView, PlatformTenantView } from "@tabtap/shared";
+import type { CreateTenantResult, FeeReportView, InviteLinkView, PlatformTenantView } from "@tabtap/shared";
+import { monthRange } from "./months";
 import { Pool } from "pg";
 import { AuthService, normalizeEmail } from "../auth/auth.service";
+import { PaymentMethodsRepository } from "../data/payment-methods.repository";
+import { PaymentsRepository } from "../data/payments.repository";
 import { TenantsRepository, toPlatformView } from "../data/tenants.repository";
 import { UsersRepository } from "../data/users.repository";
 import { DB_POOL } from "../database/database.module";
@@ -15,7 +18,15 @@ export class PlatformService {
     private readonly tenants: TenantsRepository,
     private readonly users: UsersRepository,
     private readonly auth: AuthService,
+    private readonly methods: PaymentMethodsRepository,
+    private readonly payments: PaymentsRepository,
   ) {}
+
+  /** Platform fees accrued by every restaurant in a month — the basis for monthly invoices. */
+  async feeReport(month: string): Promise<FeeReportView> {
+    const { from, to } = monthRange(month);
+    return { month, rows: await this.payments.feeReport(from, to) };
+  }
 
   listTenants(): Promise<PlatformTenantView[]> {
     return this.tenants.listForPlatform();
@@ -45,6 +56,14 @@ export class PlatformService {
         { name: input.venueName.trim(), address: null, timezone: input.timezone },
         db,
       );
+      // Card payments work out of the box; local methods are set up by the restaurant.
+      await this.methods.insert(db, tenant.id, {
+        method: "card",
+        enabled: true,
+        surchargeBps: 0,
+        details: {},
+        sortOrder: 1,
+      });
       const owner = await this.users.findOrCreate(db, ownerEmail, "");
       await this.users.addMembership(db, owner.id, tenant.id, "owner");
       const ownerInvite = owner.passwordHash ? null : await this.auth.createInviteLink(db, owner, createdBy, "invite");

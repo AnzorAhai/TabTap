@@ -1,10 +1,11 @@
 import { ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { billBreakdown, type PaymentCurrencyOption, type TableBillView } from "@tabtap/shared";
+import { billBreakdown, PAYMENT_METHODS, type PaymentMethodOption, type TableBillView } from "@tabtap/shared";
 import { Pool } from "pg";
 import { APP_CONFIG, AppConfig } from "../config/app-config";
 import { BillsRepository } from "../data/bills.repository";
 import { EqualSplitsRepository } from "../data/equal-splits.repository";
 import { ExchangeRatesRepository } from "../data/exchange-rates.repository";
+import { PaymentMethodsRepository } from "../data/payment-methods.repository";
 import { PaymentsRepository } from "../data/payments.repository";
 import type { BillRecord, TableContext } from "../data/records";
 import { TablesRepository } from "../data/tables.repository";
@@ -25,6 +26,7 @@ export class BillsService {
     private readonly splits: EqualSplitsRepository,
     private readonly payments: PaymentsRepository,
     private readonly rates: ExchangeRatesRepository,
+    private readonly methods: PaymentMethodsRepository,
     private readonly events: BillEventsService,
   ) {}
 
@@ -75,10 +77,10 @@ export class BillsService {
   }
 
   private async buildView(bill: BillRecord, table: TableContext): Promise<TableBillView> {
-    const [payments, split, paymentCurrencies] = await Promise.all([
+    const [payments, split, paymentMethods] = await Promise.all([
       this.payments.listLiveForBill(bill.id),
       this.splits.findByBill(bill.id),
-      this.paymentCurrencies(bill, table),
+      this.paymentMethods(bill, table),
     ]);
     const state = computeBillState(bill, payments, split, new Date());
     const breakdown = billBreakdown(bill.items, bill.serviceChargeMinor, bill.totalMinor);
@@ -114,19 +116,36 @@ export class BillsService {
         })),
       },
       modes: state.modes,
-      paymentCurrencies,
+      paymentMethods,
       tipPercentOptions: table.tipPercentOptions,
       holdMinutes: this.config.paymentHoldMinutes,
     };
   }
 
-  /** The bill currency, plus every extra currency the restaurant accepts and has a rate for. */
-  private async paymentCurrencies(bill: BillRecord, table: TableContext): Promise<PaymentCurrencyOption[]> {
-    const options: PaymentCurrencyOption[] = [{ currency: bill.currency, rate: null, rateEffectiveAt: null }];
-    for (const currency of table.paymentCurrencies) {
-      if (currency === bill.currency) continue;
-      const rate = await this.rates.findCurrent(table.tenantId, bill.currency, currency);
-      if (rate) options.push({ currency, rate: rate.rate, rateEffectiveAt: rate.effectiveAt.toISOString() });
+  /** The restaurant's enabled methods; those needing an exchange rate that isn't set are left out. */
+  private async paymentMethods(bill: BillRecord, table: TableContext): Promise<PaymentMethodOption[]> {
+    const options: PaymentMethodOption[] = [];
+    const rateCache = new Map<string, Awaited<ReturnType<ExchangeRatesRepository["findCurrent"]>>>();
+    for (const m of await this.methods.list(table.tenantId)) {
+      if (!m.enabled) continue;
+      const fixed = PAYMENT_METHODS[m.method];
+      const currency = fixed.currency === "bill" ? bill.currency : fixed.currency;
+      let rate = null;
+      if (currency !== bill.currency) {
+        if (!rateCache.has(currency)) {
+          rateCache.set(currency, await this.rates.findCurrent(table.tenantId, bill.currency, currency));
+        }
+        rate = rateCache.get(currency) ?? null;
+        if (!rate) continue;
+      }
+      options.push({
+        method: m.method,
+        currency,
+        rate: rate?.rate ?? null,
+        rateEffectiveAt: rate?.effectiveAt.toISOString() ?? null,
+        surchargeBps: m.surchargeBps,
+        flow: fixed.flow,
+      });
     }
     return options;
   }

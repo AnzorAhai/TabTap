@@ -1,7 +1,8 @@
 import type { InviteLinkView, StaffRole } from "@tabtap/shared";
 import { useCallback, useState, type FormEvent } from "react";
 import { api } from "./api";
-import { ErrorText, formatTime, InviteLinkBox, ROLE_LABEL, useAction, useLoad } from "./ui";
+import { FeeTable } from "./PaymentSettings";
+import { currentMonth, ErrorText, formatTime, InviteLinkBox, ROLE_LABEL, useAction, useLoad } from "./ui";
 
 const STATUS_LABEL = { invited: "Приглашён", active: "Активен", disabled: "Отключён" } as const;
 
@@ -145,6 +146,9 @@ export function PlatformSection({ onTenantsChanged }: { onTenantsChanged: () => 
     ownerEmail: "",
   });
   const [resetEmail, setResetEmail] = useState("");
+  const [month, setMonth] = useState(currentMonth());
+  const loadFees = useCallback(() => api.platformFees(month), [month]);
+  const fees = useLoad(loadFees);
   const set = (key: keyof typeof form) => (e: { target: { value: string } }) =>
     setForm((f) => ({ ...f, [key]: e.target.value }));
 
@@ -228,6 +232,13 @@ export function PlatformSection({ onTenantsChanged }: { onTenantsChanged: () => 
           </tbody>
         </table>
       </div>
+
+      <h3>Комиссия за месяц</h3>
+      <label className="form inline">
+        Месяц <input type="month" value={month} onChange={(e) => setMonth(e.target.value || currentMonth())} />
+      </label>
+      <ErrorText error={fees.error} />
+      <FeeTable rows={fees.data?.rows ?? []} showTenant />
 
       <h3>Подключить ресторан</h3>
       <form className="form grid" onSubmit={create}>

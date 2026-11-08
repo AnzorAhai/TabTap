@@ -1,4 +1,4 @@
-import type { CreatePaymentRequest, PaymentView, ReceiptView, TableBillView } from "@tabtap/shared";
+import type { CreatePaymentRequest, PaymentView, ReceiptView, SubmitProofRequest, TableBillView } from "@tabtap/shared";
 
 const API_URL = (import.meta.env.VITE_API_URL ?? "http://localhost:3000").replace(/\/+$/, "");
 
@@ -53,6 +53,10 @@ export const api = {
     }),
 
   payment: (paymentId: string) => request<PaymentView>(`/payments/${paymentId}`),
+
+  /** Report a payment made outside TabTap (Pago Móvil reference, Zelle confirmation, …). */
+  submitProof: (paymentId: string, body: SubmitProofRequest) =>
+    request<PaymentView>(`/payments/${paymentId}/proof`, { method: "POST", body: JSON.stringify(body) }),
 
   cancelPayment: (paymentId: string) => request<PaymentView>(`/payments/${paymentId}/cancel`, { method: "POST" }),
 

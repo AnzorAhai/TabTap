@@ -1,11 +1,13 @@
 import { Inject, Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from "@nestjs/common";
 import { APP_CONFIG, AppConfig } from "../config/app-config";
 import { SessionsRepository } from "../data/sessions.repository";
+import { BcvRateService } from "../rates/bcv-rate.service";
 import { PaymentsService } from "./payments.service";
 import { PosSyncService } from "./pos-sync.service";
 
 const TICK_MS = 5_000;
 const CLEANUP_EVERY_MS = 60 * 60_000;
+const BCV_EVERY_MS = 60 * 60_000;
 
 /** Periodically releases expired payment holds and delivers queued POS updates. */
 @Injectable()
@@ -14,12 +16,14 @@ export class BackgroundJobsService implements OnApplicationBootstrap, OnApplicat
   private timer?: NodeJS.Timeout;
   private running = false;
   private lastCleanup = 0;
+  private lastBcv = 0;
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly payments: PaymentsService,
     private readonly posSync: PosSyncService,
     private readonly sessions: SessionsRepository,
+    private readonly bcv: BcvRateService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -36,7 +40,17 @@ export class BackgroundJobsService implements OnApplicationBootstrap, OnApplicat
     this.running = true;
     try {
       await this.payments.expireDue();
+      await this.payments.runSimulatedChecks();
       await this.posSync.processDue();
+      if (Date.now() - this.lastBcv > BCV_EVERY_MS) {
+        this.lastBcv = Date.now();
+        // A failing rate source must not stop the other jobs.
+        await this.bcv
+          .refreshAll()
+          .catch((err: unknown) =>
+            this.logger.warn(`BCV rate refresh failed: ${err instanceof Error ? err.message : String(err)}`),
+          );
+      }
       if (Date.now() - this.lastCleanup > CLEANUP_EVERY_MS) {
         this.lastCleanup = Date.now();
         await this.sessions.deleteExpired();
