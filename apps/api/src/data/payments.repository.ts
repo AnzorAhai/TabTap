@@ -1,5 +1,13 @@
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
-import type { AdminPaymentView, FeeReportRow, PaymentMethod, PaymentMode, PaymentStatus } from "@tabtap/shared";
+import type {
+  AdminPaymentView,
+  DailySummaryView,
+  FeeReportRow,
+  PaymentMethod,
+  PaymentMode,
+  PaymentsQuery,
+  PaymentStatus,
+} from "@tabtap/shared";
 import { Pool } from "pg";
 import { DB_POOL } from "../database/database.module";
 import type { Queryable } from "../database/transaction";
@@ -7,7 +15,17 @@ import { normalizeDecimal, type PaymentRecord } from "./records";
 
 export type NewPayment = Omit<
   PaymentRecord,
-  "id" | "createdAt" | "settledAt" | "failureReason" | "providerRef" | "proof" | "proofSubmittedAt" | "reviewedBy"
+  | "id"
+  | "createdAt"
+  | "settledAt"
+  | "failureReason"
+  | "providerRef"
+  | "proof"
+  | "proofSubmittedAt"
+  | "reviewedBy"
+  | "refundedAt"
+  | "refundedBy"
+  | "refundReason"
 >;
 
 @Injectable()
@@ -99,6 +117,16 @@ export class PaymentsRepository {
     return mapPayment(rows[0]);
   }
 
+  async markRefunded(db: Queryable, paymentId: string, userId: string, reason: string | null): Promise<PaymentRecord> {
+    const { rows } = await db.query(
+      `UPDATE payments
+       SET status = 'refunded', refunded_at = now(), refunded_by = $2, refund_reason = $3, updated_at = now()
+       WHERE id = $1 RETURNING *`,
+      [paymentId, userId, reason],
+    );
+    return mapPayment(rows[0]);
+  }
+
   /** Stores what the guest reported for a pending proof-based payment; null if no longer pending. */
   async submitProof(paymentId: string, proof: Record<string, string>): Promise<PaymentRecord | null> {
     const { rows } = await this.pool.query(
@@ -176,16 +204,78 @@ export class PaymentsRepository {
     }));
   }
 
-  async listByTenant(tenantId: string, limit = 100): Promise<AdminPaymentView[]> {
+  /** Money settled during one local day; see DailySummaryView. */
+  async dailySummary(tenantId: string, date: string, timeZone: string): Promise<DailySummaryView> {
+    const day = (column: string) =>
+      `${column} >= ($2::date)::timestamp AT TIME ZONE $3 AND ${column} < ($2::date + 1)::timestamp AT TIME ZONE $3`;
+    const params = [tenantId, date, timeZone];
+    const totals = await this.pool.query(
+      `SELECT currency, count(*)::int AS payments, sum(amount_minor) AS amount, sum(tip_minor) AS tip,
+              sum(platform_fee_minor) AS fee
+       FROM payments WHERE tenant_id = $1 AND status = 'succeeded' AND ${day("settled_at")}
+       GROUP BY currency ORDER BY currency`,
+      params,
+    );
+    const byMethod = await this.pool.query(
+      `SELECT method, charge_currency, count(*)::int AS payments, sum(charge_amount_minor) AS charged
+       FROM payments WHERE tenant_id = $1 AND status = 'succeeded' AND ${day("settled_at")}
+       GROUP BY method, charge_currency ORDER BY method, charge_currency`,
+      params,
+    );
+    const refunds = await this.pool.query(
+      `SELECT currency, count(*)::int AS payments, sum(amount_minor) AS amount
+       FROM payments WHERE tenant_id = $1 AND status = 'refunded' AND ${day("refunded_at")}
+       GROUP BY currency ORDER BY currency`,
+      params,
+    );
+    return {
+      date,
+      timeZone,
+      totals: totals.rows.map((r) => ({
+        currency: r.currency,
+        payments: r.payments,
+        amountMinor: Number(r.amount),
+        tipMinor: Number(r.tip),
+        feeMinor: Number(r.fee),
+      })),
+      byMethod: byMethod.rows.map((r) => ({
+        method: r.method as PaymentMethod,
+        chargeCurrency: r.charge_currency,
+        payments: r.payments,
+        chargeAmountMinor: Number(r.charged),
+      })),
+      refunds: refunds.rows.map((r) => ({
+        currency: r.currency,
+        payments: r.payments,
+        amountMinor: Number(r.amount),
+      })),
+    };
+  }
+
+  /** Newest first. Dates in the filter are local days in `timeZone`, inclusive. */
+  async listByTenant(tenantId: string, filter: PaymentsQuery, timeZone: string): Promise<AdminPaymentView[]> {
     const { rows } = await this.pool.query(
       `SELECT p.*, t.label AS table_label
        FROM payments p
        JOIN bills b ON b.id = p.bill_id
        JOIN tables t ON t.id = b.table_id
        WHERE p.tenant_id = $1
-       ORDER BY p.created_at DESC
-       LIMIT $2`,
-      [tenantId, limit],
+         AND ($2::date IS NULL OR p.created_at >= ($2::date)::timestamp AT TIME ZONE $4)
+         AND ($3::date IS NULL OR p.created_at < ($3::date + 1)::timestamp AT TIME ZONE $4)
+         AND ($5::text IS NULL OR p.status = $5)
+         AND ($6::text IS NULL OR p.method = $6)
+       ORDER BY p.created_at DESC, p.id
+       LIMIT $7 OFFSET $8`,
+      [
+        tenantId,
+        filter.from ?? null,
+        filter.to ?? null,
+        timeZone,
+        filter.status ?? null,
+        filter.method ?? null,
+        filter.limit ?? 100,
+        filter.offset ?? 0,
+      ],
     );
     return rows.map((row) => ({
       id: row.id,
@@ -199,11 +289,16 @@ export class PaymentsRepository {
       chargeAmountMinor: Number(row.charge_amount_minor),
       chargeCurrency: row.charge_currency,
       surchargeMinor: Number(row.surcharge_minor),
+      exchangeRate: row.exchange_rate === null ? null : normalizeDecimal(row.exchange_rate as string),
       method: row.method as PaymentMethod,
       status: row.status as PaymentStatus,
       proof: (row.proof as Record<string, string> | null) ?? null,
-      awaitingReview: row.status === "pending" && row.method !== "card",
+      awaitingReview: row.status === "pending" && row.provider === "offline",
+      failureReason: row.failure_reason as string | null,
       createdAt: (row.created_at as Date).toISOString(),
+      settledAt: (row.settled_at as Date | null)?.toISOString() ?? null,
+      refundedAt: (row.refunded_at as Date | null)?.toISOString() ?? null,
+      refundReason: row.refund_reason as string | null,
     }));
   }
 }
@@ -230,6 +325,9 @@ function mapPayment(row: Record<string, unknown>): PaymentRecord {
     proof: (row.proof as Record<string, string> | null) ?? null,
     proofSubmittedAt: (row.proof_submitted_at as Date | null) ?? null,
     reviewedBy: (row.reviewed_by as string | null) ?? null,
+    refundedAt: (row.refunded_at as Date | null) ?? null,
+    refundedBy: (row.refunded_by as string | null) ?? null,
+    refundReason: (row.refund_reason as string | null) ?? null,
     provider: row.provider as string,
     providerRef: (row.provider_ref as string | null) ?? null,
     idempotencyKey: (row.idempotency_key as string | null) ?? null,

@@ -47,6 +47,11 @@ export default tseslint.config(
     },
   },
 
+  {
+    files: ["apps/guest-pwa/public/sw.js"],
+    languageOptions: { globals: globals.serviceworker },
+  },
+
   // Backend, scripts and config files run on Node.
   {
     files: ["apps/api/**/*.ts", "db/**/*.mjs", "**/*.config.{ts,mts,mjs}"],

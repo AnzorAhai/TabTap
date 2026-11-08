@@ -1,125 +1,153 @@
-import { formatMoney, type PaymentView } from "@tabtap/shared";
-import { useState, type FormEvent } from "react";
+import { minorToDecimal, type PaymentView } from "@tabtap/shared";
+import { useEffect, useState, type FormEvent } from "react";
 import { api } from "./api";
-import { METHOD_LABEL, PAY_TO_LABEL } from "./methods";
+import { useI18n } from "./i18n";
+import { CopyButton, IconHandCash, Spinner } from "./ui";
 
-const LOCALE = "ru-RU";
 /** The demo card gateway's "bank confirmed / declined" buttons (dev builds, or when enabled for a demo). */
 const DEMO_PAYMENT_CONTROLS = import.meta.env.DEV || import.meta.env.VITE_DEMO_PAYMENT_CONTROLS === "true";
 
-const money = (minor: number, currency: string) => formatMoney(minor, currency, LOCALE);
-
-/** A started payment that isn't confirmed yet: what to do next depends on the method. */
-export function PendingPayment({
-  payment,
-  busy,
-  run,
-  onUpdate,
-}: {
+type Props = {
   payment: PaymentView;
   busy: boolean;
   run: (action: () => Promise<void>) => Promise<void>;
   onUpdate: (p: PaymentView) => Promise<void>;
-}) {
+};
+
+/** "12:34" until the hold on the guest's items ends. */
+function useCountdown(expiresAt: string | null): string | null {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  if (!expiresAt) return null;
+  const seconds = Math.max(0, Math.floor((new Date(expiresAt).getTime() - now) / 1000));
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+/** A started payment that isn't confirmed yet: what to do next depends on the method. */
+export function PendingPayment(props: Props) {
+  const { payment, busy, run, onUpdate } = props;
+  const { t, money } = useI18n();
+  const countdown = useCountdown(payment.expiresAt);
   const amount = money(payment.chargeAmountMinor, payment.chargeCurrency);
-  const holdUntil = payment.expiresAt
-    ? new Date(payment.expiresAt).toLocaleTimeString(LOCALE, { timeStyle: "short" })
-    : null;
+
   const cancel = (
     <button
+      type="button"
       className="secondary"
       disabled={busy}
       onClick={() => void run(async () => onUpdate(await api.cancelPayment(payment.id)))}
     >
-      Отменить
+      {t.cancelPayment}
     </button>
+  );
+  const hold = countdown && (
+    <p className="hold">
+      {t.reservedFor} <strong className="amount">{countdown}</strong>
+    </p>
   );
 
   if (payment.flow === "staff") {
     return (
       <section className="pending">
-        <h2>Оплата наличными</h2>
-        <p>
-          Передайте официанту <strong>{amount}</strong>. Он подтвердит получение, и счёт обновится сам.
-        </p>
-        <p className="muted small">Выбранное закреплено за вами до {holdUntil}.</p>
-        <div className="actions">{cancel}</div>
+        <span className="pending-icon">
+          <IconHandCash size={34} />
+        </span>
+        <h1>{t.cashTitle}</h1>
+        <p className="big-amount">{amount}</p>
+        <p className="muted">{t.cashHint}</p>
+        <div className="waiting">
+          <Spinner />
+        </div>
+        {hold}
+        {cancel}
       </section>
     );
   }
 
   if (payment.flow === "proof") {
+    if (payment.proofSubmitted) {
+      return (
+        <section className="pending">
+          <div className="waiting">
+            <Spinner />
+          </div>
+          <h1>{t.verifyingTitle}</h1>
+          <p className="big-amount">{amount}</p>
+          <p className="muted">{t.verifyingHint}</p>
+        </section>
+      );
+    }
+    // Banking apps take the amount as plain digits, with a comma for bolívares.
+    const copyAmount = minorToDecimal(payment.chargeAmountMinor, payment.chargeCurrency).replace(
+      ".",
+      payment.chargeCurrency === "VES" ? "," : ".",
+    );
     return (
-      <section className="pending">
-        <h2>{METHOD_LABEL[payment.method]}</h2>
-        {payment.proofSubmitted ? (
-          <>
-            <p>Проверяем перевод…</p>
-            <p className="muted small">Обычно это занимает до минуты. Страница обновится сама.</p>
-          </>
-        ) : (
-          <>
-            <p>
-              Переведите ровно <strong>{amount}</strong>:
-            </p>
-            <dl className="pay-to">
-              {Object.entries(payment.payTo ?? {}).map(([key, value]) => (
-                <div key={key}>
-                  <dt>{PAY_TO_LABEL[key] ?? key}</dt>
-                  <dd>{value}</dd>
-                </div>
-              ))}
-            </dl>
-            <ProofForm payment={payment} busy={busy} run={run} onUpdate={onUpdate} />
-            <p className="muted small">Выбранное закреплено за вами до {holdUntil}.</p>
-            <div className="actions">{cancel}</div>
-          </>
-        )}
+      <section className="pending pending-left">
+        <h1>{t.method[payment.method]}</h1>
+        <p className="muted">{t.sendExactly}</p>
+        <div className="amount-copy">
+          <p className="big-amount">{amount}</p>
+          <CopyButton value={copyAmount} />
+        </div>
+        <h2>{t.payToTitle}</h2>
+        <dl className="pay-to">
+          {Object.entries(payment.payTo ?? {}).map(([key, value]) => (
+            <div key={key}>
+              <dt>{t.payTo[key] ?? key}</dt>
+              <dd>
+                <span>{value}</span>
+                <CopyButton value={value} />
+              </dd>
+            </div>
+          ))}
+        </dl>
+        <h2>{t.proofTitle}</h2>
+        <ProofForm {...props} />
+        {hold}
+        {cancel}
       </section>
     );
   }
 
   return (
     <section className="pending">
-      <h2>Ждём подтверждения оплаты…</h2>
-      <p className="muted">
-        {amount} · резерв до {holdUntil}
-      </p>
-      <div className="actions">
-        {DEMO_PAYMENT_CONTROLS && (
-          <>
-            <button
-              disabled={busy}
-              onClick={() => void run(async () => onUpdate(await api.mockConfirm(payment.id, "succeeded")))}
-            >
-              Банк подтвердил (демо)
-            </button>
-            <button
-              className="secondary"
-              disabled={busy}
-              onClick={() => void run(async () => onUpdate(await api.mockConfirm(payment.id, "failed")))}
-            >
-              Банк отклонил (демо)
-            </button>
-          </>
-        )}
-        {cancel}
+      <div className="waiting">
+        <Spinner />
       </div>
+      <h1>{t.gatewayTitle}</h1>
+      <p className="big-amount">{amount}</p>
+      {hold}
+      {DEMO_PAYMENT_CONTROLS && (
+        <>
+          <button
+            type="button"
+            className="primary"
+            disabled={busy}
+            onClick={() => void run(async () => onUpdate(await api.mockConfirm(payment.id, "succeeded")))}
+          >
+            {t.demoApprove}
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            disabled={busy}
+            onClick={() => void run(async () => onUpdate(await api.mockConfirm(payment.id, "failed")))}
+          >
+            {t.demoDecline}
+          </button>
+        </>
+      )}
+      {cancel}
     </section>
   );
 }
 
-function ProofForm({
-  payment,
-  busy,
-  run,
-  onUpdate,
-}: {
-  payment: PaymentView;
-  busy: boolean;
-  run: (action: () => Promise<void>) => Promise<void>;
-  onUpdate: (p: PaymentView) => Promise<void>;
-}) {
+function ProofForm({ payment, busy, run, onUpdate }: Props) {
+  const { t } = useI18n();
   const [reference, setReference] = useState("");
   const [payerPhone, setPayerPhone] = useState("");
   const [payerBank, setPayerBank] = useState("");
@@ -143,15 +171,14 @@ function ProofForm({
   return (
     <form className="proof-form" onSubmit={submit}>
       <label>
-        {isPagoMovil
-          ? "Номер операции (referencia)"
-          : payment.method === "zelle"
-            ? "Код подтверждения Zelle"
-            : "ID ордера Binance"}
+        {t.reference[payment.method]}
         <input
           required
-          minLength={4}
+          pattern="[A-Za-z0-9\-]{4,40}"
+          title={t.referenceHint}
           maxLength={40}
+          autoComplete="off"
+          inputMode={isPagoMovil ? "numeric" : "text"}
           value={reference}
           onChange={(e) => setReference(e.target.value.trim())}
         />
@@ -159,21 +186,35 @@ function ProofForm({
       {isPagoMovil ? (
         <>
           <label>
-            Ваш телефон
-            <input inputMode="tel" value={payerPhone} onChange={(e) => setPayerPhone(e.target.value)} />
+            <span>
+              {t.payerPhone} <small>({t.optional})</small>
+            </span>
+            <input
+              type="tel"
+              pattern="[0-9+\-\s()]{7,20}"
+              autoComplete="tel"
+              value={payerPhone}
+              onChange={(e) => setPayerPhone(e.target.value)}
+            />
           </label>
           <label>
-            Ваш банк
-            <input value={payerBank} onChange={(e) => setPayerBank(e.target.value)} />
+            <span>
+              {t.payerBank} <small>({t.optional})</small>
+            </span>
+            <input maxLength={60} value={payerBank} onChange={(e) => setPayerBank(e.target.value)} />
           </label>
         </>
       ) : (
         <label>
-          Имя отправителя
-          <input value={payerName} onChange={(e) => setPayerName(e.target.value)} />
+          <span>
+            {t.payerName} <small>({t.optional})</small>
+          </span>
+          <input maxLength={100} autoComplete="name" value={payerName} onChange={(e) => setPayerName(e.target.value)} />
         </label>
       )}
-      <button disabled={busy}>Я оплатил(а)</button>
+      <button type="submit" className="primary" disabled={busy}>
+        {t.iPaid}
+      </button>
     </form>
   );
 }

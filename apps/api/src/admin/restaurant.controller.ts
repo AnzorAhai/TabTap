@@ -1,8 +1,12 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query } from "@nestjs/common";
-import { PaymentMethod } from "@tabtap/shared";
+import { PaymentMethod, PaymentStatus } from "@tabtap/shared";
 import type {
+  DailySummaryView,
   FeeReportView,
+  LiveTableView,
+  PaymentsQuery,
   PaymentView,
+  RefundPaymentRequest,
   RejectPaymentRequest,
   TenantPaymentMethodView,
   UpdatePaymentMethodsRequest,
@@ -214,6 +218,44 @@ export class RejectPaymentDto implements RejectPaymentRequest {
   reason?: string;
 }
 
+export class RefundPaymentDto implements RefundPaymentRequest {
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  reason?: string;
+}
+
+export class PaymentsQueryDto implements PaymentsQuery {
+  @IsOptional()
+  @IsString()
+  from?: string;
+
+  @IsOptional()
+  @IsString()
+  to?: string;
+
+  @IsOptional()
+  @IsIn(Object.values(PaymentStatus))
+  status?: PaymentStatus;
+
+  @IsOptional()
+  @IsIn(Object.values(PaymentMethod))
+  method?: PaymentMethod;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(5000)
+  limit?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  offset?: number;
+}
+
 export class ChangeRoleDto {
   @IsIn(ROLES)
   role!: StaffRole;
@@ -265,6 +307,26 @@ export class RestaurantController {
     @Body() dto: RejectPaymentDto,
   ): Promise<PaymentView> {
     return this.paymentAdmin.reject(access.tenantId, paymentId, auth.userId, dto.reason);
+  }
+
+  /** Gives a settled payment back; for offline methods, records that staff returned the money. */
+  @TenantRoles("owner", "manager")
+  @Post("payments/:paymentId/refund")
+  @HttpCode(200)
+  refundPayment(
+    @CurrentTenant() access: TenantAccess,
+    @CurrentAuth() auth: AuthContext,
+    @Param("paymentId", ParseIdPipe) paymentId: string,
+    @Body() dto: RefundPaymentDto,
+  ): Promise<PaymentView> {
+    return this.paymentAdmin.refund(access.tenantId, paymentId, auth.userId, dto.reason);
+  }
+
+  /** One day's takings in the restaurant's time zone (default: today). */
+  @TenantRoles("owner", "manager")
+  @Get("summary")
+  summary(@CurrentTenant() access: TenantAccess, @Query("date") date?: string): Promise<DailySummaryView> {
+    return this.restaurant.dailySummary(access.tenantId, date);
   }
 
   /** Platform fees for a month (default: this month), to be invoiced to the restaurant. */
@@ -323,6 +385,13 @@ export class RestaurantController {
     return this.restaurant.listTables(access.tenantId);
   }
 
+  /** What is happening at each table right now. */
+  @AnyTenantRole()
+  @Get("tables/live")
+  liveTables(@CurrentTenant() access: TenantAccess): Promise<LiveTableView[]> {
+    return this.restaurant.listLiveTables(access.tenantId);
+  }
+
   @TenantRoles("owner", "manager")
   @Post("tables")
   createTable(@CurrentTenant() access: TenantAccess, @Body() dto: CreateTableDto): Promise<AdminTableView> {
@@ -352,8 +421,8 @@ export class RestaurantController {
 
   @AnyTenantRole()
   @Get("payments")
-  payments(@CurrentTenant() access: TenantAccess): Promise<AdminPaymentView[]> {
-    return this.restaurant.listPayments(access.tenantId);
+  payments(@CurrentTenant() access: TenantAccess, @Query() query: PaymentsQueryDto): Promise<AdminPaymentView[]> {
+    return this.restaurant.listPayments(access.tenantId, query);
   }
 
   @AnyTenantRole()

@@ -51,7 +51,7 @@ export class SubmitProofDto implements SubmitProofRequest {
   reference!: string;
 
   @IsOptional()
-  @Matches(/^[0-9+-s()]{7,20}$/, { message: "payerPhone must be a phone number" })
+  @Matches(/^[0-9+\-\s()]{7,20}$/, { message: "payerPhone must be a phone number" })
   payerPhone?: string;
 
   @IsOptional()

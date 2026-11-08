@@ -1,5 +1,5 @@
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { lineTotalsMinor, type BillItem, type PaymentMode, type ReceiptView } from "@tabtap/shared";
+import { lineTotalsMinor, type BillItem, type PaymentMethod, type PaymentMode, type ReceiptView } from "@tabtap/shared";
 import { Pool } from "pg";
 import { DB_POOL } from "../database/database.module";
 import type { Queryable } from "../database/transaction";
@@ -21,7 +21,7 @@ export class ReceiptsRepository {
     const { rows } = await this.pool.query(
       `SELECT r.id AS receipt_id, p.id AS payment_id, p.mode, p.item_ids, p.share_indices,
               p.amount_minor, p.tip_minor, p.currency, p.charge_amount_minor, p.charge_currency,
-              p.exchange_rate, p.settled_at,
+              p.exchange_rate, p.settled_at, p.method, p.surcharge_minor, p.surcharge_bps,
               b.items AS bill_items, b.total_minor AS bill_total_minor,
               tn.name AS tenant_name, v.name AS venue_name, t.label AS table_label
        FROM receipts r
@@ -61,6 +61,9 @@ export class ReceiptsRepository {
       currency: row.currency,
       chargeAmountMinor: Number(row.charge_amount_minor),
       chargeCurrency: row.charge_currency,
+      surchargeMinor: Number(row.surcharge_minor),
+      surchargeBps: Number(row.surcharge_bps),
+      method: row.method as PaymentMethod,
       exchangeRate: row.exchange_rate === null ? null : normalizeDecimal(row.exchange_rate as string),
       paidAt: (row.settled_at as Date).toISOString(),
     };

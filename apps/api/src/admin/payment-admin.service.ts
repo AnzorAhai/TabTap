@@ -89,6 +89,10 @@ export class PaymentAdminService {
     return this.paymentsService.rejectByStaff(tenantId, paymentId, userId, reason);
   }
 
+  refund(tenantId: string, paymentId: string, userId: string, reason?: string): Promise<PaymentView> {
+    return this.paymentsService.refund(tenantId, paymentId, userId, reason);
+  }
+
   async feeReport(tenantId: string, month: string): Promise<FeeReportView> {
     const { from, to } = monthRange(month);
     return { month, rows: await this.payments.feeReport(from, to, tenantId) };

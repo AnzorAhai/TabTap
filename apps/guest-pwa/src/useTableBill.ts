@@ -5,11 +5,12 @@ import { api } from "./api";
 /**
  * Loads the table's bill and keeps it live: the server pushes "bill.updated" over SSE
  * whenever anyone at the table claims or pays something, and we refetch. Also
- * refetches when the tab regains focus, in case the stream was down meanwhile.
+ * refetches when the tab regains focus or the connection returns, in case the stream
+ * was down meanwhile.
  */
 export function useTableBill(qrToken: string) {
   const [view, setView] = useState<TableBillView | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
   const refreshTimer = useRef<number | undefined>(undefined);
 
@@ -18,7 +19,7 @@ export function useTableBill(qrToken: string) {
       setView(await api.tableBill(qrToken));
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(e);
     } finally {
       setLoading(false);
     }
@@ -28,13 +29,25 @@ export function useTableBill(qrToken: string) {
     let cancelled = false;
     api
       .tableBill(qrToken)
-      .then((v) => !cancelled && setView(v))
-      .catch((e: unknown) => !cancelled && setError(e instanceof Error ? e.message : String(e)))
-      .finally(() => !cancelled && setLoading(false));
+      .then((v) => {
+        if (!cancelled) setView(v);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(e);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    // Works before the bill has loaded too: a guest offline at first gets it when back online.
+    const onReconnect = () => void refresh();
+    window.addEventListener("online", onReconnect);
+    window.addEventListener("focus", onReconnect);
     return () => {
       cancelled = true;
+      window.removeEventListener("online", onReconnect);
+      window.removeEventListener("focus", onReconnect);
     };
-  }, [qrToken]);
+  }, [qrToken, refresh]);
 
   const billId = view?.bill.id;
   useEffect(() => {
@@ -47,11 +60,8 @@ export function useTableBill(qrToken: string) {
       window.clearTimeout(refreshTimer.current);
       refreshTimer.current = window.setTimeout(() => void refresh(), 250);
     };
-    const onFocus = () => void refresh();
-    window.addEventListener("focus", onFocus);
     return () => {
       source.close();
-      window.removeEventListener("focus", onFocus);
       window.clearTimeout(refreshTimer.current);
     };
   }, [billId, refresh]);

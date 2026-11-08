@@ -19,15 +19,31 @@ export function currencyExponent(currency: string): number {
   return exponent;
 }
 
-/** Formats a minor-unit amount for display, e.g. (123456, "USD", "es-VE") → "US$ 1.234,56". */
+/** How people in our markets write these; Intl gives "USD", "VES" or "Bs.S" depending on the locale. */
+const LOCAL_SYMBOLS: Record<string, string> = { USD: "$", VES: "Bs" };
+
+/** Formats a minor-unit amount for display, e.g. (123456, "USD", "es-VE") → "$ 1.234,56". */
 export function formatMoney(amountMinor: number, currency: string, locale?: string): string {
   const exponent = currencyExponent(currency);
+  const symbol = LOCAL_SYMBOLS[currency.toUpperCase()];
   return new Intl.NumberFormat(locale, {
     style: "currency",
     currency,
     minimumFractionDigits: exponent,
     maximumFractionDigits: exponent,
-  }).format(amountMinor / 10 ** exponent);
+  })
+    .formatToParts(amountMinor / 10 ** exponent)
+    .map((part) => (part.type === "currency" && symbol ? symbol : part.value))
+    .join("");
+}
+
+/** Exact plain decimal of a minor-unit amount, for exports: (123456, "USD") → "1234.56". */
+export function minorToDecimal(amountMinor: number, currency: string): string {
+  assertInteger(amountMinor, "amountMinor");
+  const exponent = currencyExponent(currency);
+  const digits = String(Math.abs(amountMinor)).padStart(exponent + 1, "0");
+  const sign = amountMinor < 0 ? "-" : "";
+  return exponent === 0 ? sign + digits : `${sign}${digits.slice(0, -exponent)}.${digits.slice(-exponent)}`;
 }
 
 /**

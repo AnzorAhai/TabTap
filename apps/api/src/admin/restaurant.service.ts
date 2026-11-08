@@ -2,17 +2,22 @@ import { Inject, Injectable } from "@nestjs/common";
 import type {
   AdminPaymentView,
   AdminTableView,
+  DailySummaryView,
   ExchangeRateView,
+  LiveTableView,
+  PaymentsQuery,
   StaffRole,
   TenantSettingsView,
   VenueView,
 } from "@tabtap/shared";
 import { APP_CONFIG, AppConfig } from "../config/app-config";
+import { BillsRepository } from "../data/bills.repository";
 import { ExchangeRatesRepository } from "../data/exchange-rates.repository";
 import { PaymentsRepository } from "../data/payments.repository";
 import type { ExchangeRateRecord, TableContext } from "../data/records";
 import { TablesRepository } from "../data/tables.repository";
 import { TenantsRepository, type TenantRecord } from "../data/tenants.repository";
+import { assertDay, todayIn } from "./months";
 
 /** A restaurant's own data, as its staff manage it in the admin panel. */
 @Injectable()
@@ -22,6 +27,7 @@ export class RestaurantService {
     private readonly tenants: TenantsRepository,
     private readonly tables: TablesRepository,
     private readonly payments: PaymentsRepository,
+    private readonly bills: BillsRepository,
     private readonly rates: ExchangeRatesRepository,
   ) {}
 
@@ -92,8 +98,19 @@ export class RestaurantService {
     return this.toTableView(await this.tables.findInTenant(tenantId, tableId));
   }
 
-  listPayments(tenantId: string): Promise<AdminPaymentView[]> {
-    return this.payments.listByTenant(tenantId);
+  async listPayments(tenantId: string, query: PaymentsQuery): Promise<AdminPaymentView[]> {
+    if (query.from) assertDay(query.from);
+    if (query.to) assertDay(query.to);
+    return this.payments.listByTenant(tenantId, query, await this.timeZone(tenantId));
+  }
+
+  async dailySummary(tenantId: string, date?: string): Promise<DailySummaryView> {
+    const timeZone = await this.timeZone(tenantId);
+    return this.payments.dailySummary(tenantId, date ? assertDay(date) : todayIn(timeZone), timeZone);
+  }
+
+  listLiveTables(tenantId: string): Promise<LiveTableView[]> {
+    return this.bills.listLive(tenantId);
   }
 
   async listExchangeRates(tenantId: string): Promise<ExchangeRateView[]> {
@@ -102,6 +119,11 @@ export class RestaurantService {
 
   async setExchangeRate(tenantId: string, base: string, quote: string, rate: string): Promise<ExchangeRateView> {
     return toRateView(await this.rates.insert(tenantId, base, quote, rate, "manual"));
+  }
+
+  /** Days are counted in the restaurant's first venue's time zone. */
+  private async timeZone(tenantId: string): Promise<string> {
+    return (await this.tenants.listVenues(tenantId))[0]?.timezone ?? "UTC";
   }
 
   private toTableView(t: TableContext): AdminTableView {

@@ -118,7 +118,6 @@ export class BillsService {
       modes: state.modes,
       paymentMethods,
       tipPercentOptions: table.tipPercentOptions,
-      holdMinutes: this.config.paymentHoldMinutes,
     };
   }
 
@@ -145,6 +144,7 @@ export class BillsService {
         rateEffectiveAt: rate?.effectiveAt.toISOString() ?? null,
         surchargeBps: m.surchargeBps,
         flow: fixed.flow,
+        holdMinutes: fixed.flow === "gateway" ? this.config.paymentHoldMinutes : this.config.offlineHoldMinutes,
       });
     }
     return options;

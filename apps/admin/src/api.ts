@@ -4,6 +4,7 @@ import type {
   CreateTableRequest,
   CreateTenantRequest,
   CreateTenantResult,
+  DailySummaryView,
   ExchangeRateView,
   FeeReportView,
   PaymentView,
@@ -12,7 +13,9 @@ import type {
   InviteLinkView,
   InviteStaffRequest,
   InviteStaffResult,
+  LiveTableView,
   MeView,
+  PaymentsQuery,
   PlatformTenantView,
   SessionView,
   SetExchangeRateRequest,
@@ -81,7 +84,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch {
-    throw new ApiError(0, "Нет связи с сервером. Проверьте интернет и попробуйте ещё раз.");
+    throw new ApiError(0, "Network error");
   }
   if (res.status === 401 && token) {
     setSession(null);
@@ -122,7 +125,19 @@ export const api = {
     request<AdminTableView>("PATCH", `${t(tenantId)}/tables/${tableId}`, body),
   rotateQr: (tenantId: string, tableId: string) =>
     request<AdminTableView>("POST", `${t(tenantId)}/tables/${tableId}/rotate-qr`),
-  payments: (tenantId: string) => request<AdminPaymentView[]>("GET", `${t(tenantId)}/payments`),
+  liveTables: (tenantId: string) => request<LiveTableView[]>("GET", `${t(tenantId)}/tables/live`),
+  summary: (tenantId: string, date?: string) =>
+    request<DailySummaryView>("GET", `${t(tenantId)}/summary${date ? `?date=${date}` : ""}`),
+  payments: (tenantId: string, query: PaymentsQuery = {}) => {
+    const params = new URLSearchParams(
+      Object.entries(query)
+        .filter(([, value]) => value !== undefined)
+        .map(([key, value]) => [key, String(value)]),
+    );
+    return request<AdminPaymentView[]>("GET", `${t(tenantId)}/payments?${params.toString()}`);
+  },
+  refundPayment: (tenantId: string, paymentId: string, reason?: string) =>
+    request<PaymentView>("POST", `${t(tenantId)}/payments/${paymentId}/refund`, { reason }),
   confirmPayment: (tenantId: string, paymentId: string) =>
     request<PaymentView>("POST", `${t(tenantId)}/payments/${paymentId}/confirm`),
   rejectPayment: (tenantId: string, paymentId: string, reason?: string) =>
