@@ -1,5 +1,5 @@
 import { MiddlewareConsumer, Module, NestModule } from "@nestjs/common";
-import { APP_FILTER, APP_GUARD } from "@nestjs/core";
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { AdminModule } from "./admin/admin.module";
 import { AuthModule } from "./auth/auth.module";
@@ -10,6 +10,7 @@ import { APP_CONFIG, AppConfig } from "./config/app-config";
 import { ConfigModule } from "./config/config.module";
 import { DataModule } from "./data/data.module";
 import { DatabaseModule } from "./database/database.module";
+import { TenantScopeInterceptor } from "./database/tenant-scope.interceptor";
 import { DemoPosModule } from "./demo-pos/demo-pos.module";
 import { HealthController } from "./health/health.controller";
 import { PaymentsModule } from "./payments/payments.module";
@@ -36,6 +37,7 @@ import { PaymentsModule } from "./payments/payments.module";
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
+    { provide: APP_INTERCEPTOR, useClass: TenantScopeInterceptor },
   ],
 })
 export class AppModule implements NestModule {

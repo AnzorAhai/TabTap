@@ -1,0 +1,57 @@
+name: Database backup
+
+# Nightly encrypted dump of the production database, kept as a build artifact for 30 days.
+# The repository is public, so the dump is encrypted before it leaves the runner. Does
+# nothing until both secrets are set; see docs/LAUNCH.md for setup and for restoring.
+
+on:
+  schedule:
+    - cron: "17 7 * * *" # 03:17 in Caracas
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+      BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+
+    steps:
+      - name: Check configuration
+        id: config
+        run: |
+          if [ -n "$BACKUP_DATABASE_URL" ] && [ -n "$BACKUP_PASSPHRASE" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Backups are not configured: set BACKUP_DATABASE_URL and BACKUP_PASSPHRASE."
+          fi
+
+      - name: Install pg_dump
+        if: steps.config.outputs.ready == 'true'
+        run: |
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Dump and encrypt
+        if: steps.config.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          /usr/lib/postgresql/17/bin/pg_dump --format=custom --no-owner --no-privileges "$BACKUP_DATABASE_URL" \
+            | gpg --batch --yes --symmetric --cipher-algo AES256 --pinentry-mode loopback \
+                --passphrase-fd 3 --output tabtap.dump.gpg 3<<<"$BACKUP_PASSPHRASE"
+          test -s tabtap.dump.gpg
+          ls -l tabtap.dump.gpg
+
+      - name: Keep the backup
+        if: steps.config.outputs.ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabtap-db-${{ github.run_id }}
+          path: tabtap.dump.gpg
+          retention-days: 30
+          if-no-files-found: error
