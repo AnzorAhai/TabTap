@@ -22,13 +22,19 @@ export interface MarkPaidInput {
   currency: string;
 }
 
+/** Which table is meant: the POS's own reference is only unique within a venue. */
+export interface PosTableRef {
+  venueId: string;
+  posTableRef: string;
+}
+
 // Every POS integration (iiko, r_keeper, Toast, ...) implements this contract.
 // Core domain code depends only on this interface, never on a concrete POS SDK.
 export interface POSConnector {
   readonly type: string;
 
-  /** The open bill on a table, by the POS's own table reference; null if there is none. */
-  getOpenBill(posTableRef: string): Promise<PosBill | null>;
+  /** The open bill on a table; null if there is none. */
+  getOpenBill(table: PosTableRef): Promise<PosBill | null>;
   /** Tells the POS a TabTap payment was made against one of its bills. Must be idempotent per paymentId. */
   markPaid(externalBillId: string, payment: MarkPaidInput): Promise<void>;
   healthCheck(): Promise<boolean>;

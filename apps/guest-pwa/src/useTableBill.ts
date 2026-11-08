@@ -1,6 +1,6 @@
 import type { BillEvent, TableBillView } from "@tabtap/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api } from "./api";
+import { api, ApiError } from "./api";
 
 /**
  * Loads the table's bill and keeps it live: the server pushes "bill.updated" over SSE
@@ -20,6 +20,13 @@ export function useTableBill(qrToken: string) {
       setError(null);
     } catch (e) {
       setError(e);
+      // The table was closed while the guest had it open: keep the page and their receipts.
+      if (e instanceof ApiError && e.status === 404) {
+        setView(
+          (v) =>
+            v && { ...v, bill: { ...v.bill, status: "closed" }, modes: { full: false, items: false, shares: false } },
+        );
+      }
     } finally {
       setLoading(false);
     }

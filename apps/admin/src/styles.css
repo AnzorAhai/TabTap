@@ -1013,3 +1013,249 @@ label.check {
     animation: none;
   }
 }
+
+/* Demo POS */
+
+.pos-tables {
+  display: flex;
+  gap: 8px;
+  padding-bottom: 2px;
+  overflow-x: auto;
+}
+
+button.pos-table {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  min-width: 108px;
+  min-height: 62px;
+  padding: 6px 12px;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--ink);
+}
+
+.pos-table small {
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+button.pos-table-on {
+  border-color: var(--brand);
+}
+
+.pos-table-open small {
+  color: var(--warn);
+  font-weight: 700;
+}
+
+.pos-table-paying small {
+  color: var(--warn);
+  font-weight: 700;
+}
+
+.pos-table-paid small {
+  color: var(--ok);
+  font-weight: 700;
+}
+
+.pos-grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 390px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.pos-order {
+  position: sticky;
+  top: 16px;
+}
+
+.pos-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+  text-align: center;
+}
+
+.pos-qr img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.pos-lines,
+.pos-payments {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pos-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  border-bottom: 1px dashed var(--line);
+}
+
+.pos-line-name {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  min-width: 0;
+}
+
+.pos-line-paid .pos-line-name,
+.pos-line-paid .pos-amount {
+  color: var(--ink-2);
+}
+
+.pos-amount {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+button.pos-remove {
+  width: 30px;
+  min-height: 30px;
+  padding: 0;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.pos-sums {
+  margin: 10px 0 0;
+}
+
+.pos-sums div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 1px 0;
+  color: var(--ink-2);
+}
+
+.pos-sums dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.pos-progress {
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+}
+
+.pos-progress dd {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.pos-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1.5px solid var(--ink);
+  font-weight: 600;
+}
+
+.pos-total strong {
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pos-right {
+  margin: 2px 0 0;
+  text-align: right;
+}
+
+.pos-paid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-size: 17px;
+}
+
+.pos-paid span {
+  font-variant-numeric: tabular-nums;
+}
+
+.pos-payments li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.pos-payments li span:first-child {
+  flex: 1;
+}
+
+.pos-close {
+  width: 100%;
+  margin-top: 14px;
+}
+
+.pos-menu {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+button.pos-dish {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-height: 84px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-weight: 500;
+  text-align: left;
+}
+
+.pos-dish span {
+  flex: 1;
+  line-height: 1.2;
+}
+
+.pos-dish strong {
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pos-dish small {
+  color: var(--ink-2);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 860px) {
+  .pos-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pos-order {
+    position: static;
+  }
+}

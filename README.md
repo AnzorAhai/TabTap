@@ -66,6 +66,15 @@ verification APIs, Binance Pay) plug in per bank once there is a partner.
 Restaurants with rate source **BCV** get the official USD→VES rate from `BCV_RATE_URL` (DolarAPI
 format) every hour; staff can also take it on demand or enter a rate by hand.
 
+## Demo POS
+
+With `POS_CONNECTOR_TYPE=demo` the demo restaurant (`tenants.is_demo`) gets a waiter's screen in the admin
+panel: orders are punched from a menu in the database and reach guests like a bill from a real POS. A
+"reset demo" button wipes that restaurant's orders, bills and payments; tables, QR codes, menu and settings
+stay. Other restaurants get 404 from these endpoints. The script for showing it: [docs/DEMO.md](docs/DEMO.md).
+
+The default `mock` connector keeps three fixed bills in memory and is what the tests use.
+
 ## Refunds
 
 Owners and managers can refund a completed payment from the Payments page. Card payments go back
@@ -76,7 +85,7 @@ with the restaurant.
 
 ## Staff access
 
-The admin panel needs a sign-in (email + password). Each person has a role per restaurant:
+The admin panel needs a sign-in (login + password). Each person has a role per restaurant:
 
 | Role     | Can                                                                            |
 | -------- | ------------------------------------------------------------------------------ |
@@ -93,10 +102,11 @@ session as `Authorization: Bearer <token>` (sessions last `SESSION_TTL_DAYS`, 14
 The very first account is created from the command line, against the database in `DATABASE_URL`:
 
 ```bash
-npm run users:invite -- --email you@example.com --platform-admin --tenant 11111111-1111-1111-1111-111111111111 --role owner --admin-url http://localhost:5174
+npm run users:invite -- --login you --platform-admin --tenant 11111111-1111-1111-1111-111111111111 --role owner --admin-url http://localhost:5174
 ```
 
 It prints the link to open. Run it again for a new link if one is lost or a password is forgotten.
+Add `--password <password>` to set the password directly and skip the link.
 
 Table QR codes carry a random 128-bit token (`?table=…`); owners and managers can issue a new
 one per table ("Новый QR"), which immediately invalidates the printed code.
@@ -111,7 +121,7 @@ it running in its own terminal), `docker compose up -d`, or use a Supabase proje
 npm install                                  # also builds packages/shared
 cp apps/api/.env.example apps/api/.env       # then fill in DATABASE_URL
 npm run db:migrate                           # schema + demo restaurant with 3 tables
-npm run users:invite -- --email you@example.com --platform-admin   --tenant 11111111-1111-1111-1111-111111111111 --role owner   # prints your sign-in link
+npm run users:invite -- --login you --platform-admin   --tenant 11111111-1111-1111-1111-111111111111 --role owner   # prints your sign-in link
 ```
 
 Run each in its own terminal:

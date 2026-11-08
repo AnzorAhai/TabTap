@@ -34,7 +34,7 @@ export class BillsService {
   async getTableView(qrToken: string): Promise<TableBillView> {
     const table = await this.tables.findContextByQrToken(qrToken);
     if (!table || !table.isActive || !table.tenantActive) throw new NotFoundException("Table not found");
-    const posBill = await this.pos.getOpenBill(table.posTableRef);
+    const posBill = await this.pos.getOpenBill(table);
     if (!posBill) throw new NotFoundException("There is no open bill on this table");
     const { bill, changed } = await this.bills.upsertFromPos(table, posBill);
     if (changed) this.events.emit(bill.id);

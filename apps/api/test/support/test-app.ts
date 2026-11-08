@@ -51,7 +51,7 @@ export interface TestApp {
   tableView: (posTableRef?: string) => Promise<TableBillView>;
   /** Creates a staff account with TEST_PASSWORD, signs it in and returns the session. */
   signIn: (opts: {
-    email: string;
+    login: string;
     role?: StaffRole;
     tenantId?: string;
     platformAdmin?: boolean;
@@ -109,10 +109,10 @@ export async function createTestApp(env: Record<string, string> = {}): Promise<T
         .expect(200);
       return res.body as TableBillView;
     },
-    signIn: async ({ email, role, tenantId, platformAdmin = false }) => {
+    signIn: async ({ login, role, tenantId, platformAdmin = false }) => {
       const { rows } = await db.query(
-        `INSERT INTO users (email, password_hash, is_platform_admin) VALUES ($1, $2, $3) RETURNING id`,
-        [email, await hashPassword(TEST_PASSWORD), platformAdmin],
+        `INSERT INTO users (login, password_hash, is_platform_admin) VALUES ($1, $2, $3) RETURNING id`,
+        [login, await hashPassword(TEST_PASSWORD), platformAdmin],
       );
       if (role) {
         await db.query("INSERT INTO memberships (user_id, tenant_id, role) VALUES ($1, $2, $3)", [
@@ -121,7 +121,7 @@ export async function createTestApp(env: Record<string, string> = {}): Promise<T
           role,
         ]);
       }
-      const res = await http().post("/auth/login").send({ email, password: TEST_PASSWORD }).expect(200);
+      const res = await http().post("/auth/login").send({ login, password: TEST_PASSWORD }).expect(200);
       return res.body as SessionView;
     },
     pay,

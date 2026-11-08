@@ -36,7 +36,7 @@ export async function verifyPassword(password: string, stored: string): Promise<
 let dummyHash: Promise<string> | undefined;
 /**
  * Spends the same time as checking a real password, so a login attempt for an unknown
- * email can't be told apart from a wrong password by how long it takes.
+ * login can't be told apart from a wrong password by how long it takes.
  */
 export async function burnPasswordCheck(password: string): Promise<void> {
   dummyHash ??= hashPassword("not-a-real-password");

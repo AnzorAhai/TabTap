@@ -30,8 +30,9 @@ services:
       # Blueprint syncs apply it (sync: false values would have to be set by hand).
       - key: ADMIN_APP_URL
         value: https://tab-tap-admin.vercel.app
+      # demo: the waiter's screen in the admin panel is the POS (docs/DEMO.md)
       - key: POS_CONNECTOR_TYPE
-        value: mock
+        value: demo
       - key: PAYMENT_PROVIDER_TYPE
         value: mock
       # instant | manual (pending until confirmed — closer to Pago Móvil for demos)

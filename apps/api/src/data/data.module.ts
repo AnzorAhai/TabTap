@@ -2,6 +2,7 @@ import { Global, Module } from "@nestjs/common";
 import { BillEventsService } from "../events/bill-events.service";
 import { BcvRateService } from "../rates/bcv-rate.service";
 import { BillsRepository } from "./bills.repository";
+import { DemoPosRepository } from "./demo-pos.repository";
 import { EqualSplitsRepository } from "./equal-splits.repository";
 import { ExchangeRatesRepository } from "./exchange-rates.repository";
 import { PaymentMethodsRepository } from "./payment-methods.repository";
@@ -16,6 +17,7 @@ import { UsersRepository } from "./users.repository";
 const providers = [
   TablesRepository,
   BillsRepository,
+  DemoPosRepository,
   EqualSplitsRepository,
   PaymentsRepository,
   PaymentMethodsRepository,

@@ -67,7 +67,7 @@ type ErrorKey = keyof Strings["errors"];
 
 /** The API answers in English; these are the messages staff actually run into. */
 const KNOWN_ERRORS: [RegExp, ErrorKey][] = [
-  [/^Invalid email or password/, "invalidLogin"],
+  [/^Invalid login or password/, "invalidLogin"],
   [/expired or was already used/, "linkExpired"],
   [/no longer valid/, "linkInvalid"],
   [/at least one owner/, "needOwner"],
@@ -78,8 +78,9 @@ const KNOWN_ERRORS: [RegExp, ErrorKey][] = [
   [/Only completed payments can be refunded/, "onlyCompletedRefund"],
   [/couldn't make the refund/, "refundFailed"],
   [/BCV rate/, "bcvUnavailable"],
-  [/No account with this email/, "noAccount"],
+  [/No account with this login/, "noAccount"],
   [/^(pago_movil|zelle|binance_pay): /, "methodDetails"],
+  [/lines can't be removed/, "linesLocked"],
 ];
 
 export function errorText(error: unknown, t: Strings): string {

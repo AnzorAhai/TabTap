@@ -1,15 +1,15 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Req } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
 import type { AcceptInviteRequest, InviteInfoView, LoginRequest, MeView, SessionView } from "@tabtap/shared";
-import { IsEmail, IsOptional, IsString, MaxLength } from "class-validator";
+import { IsOptional, IsString, MaxLength } from "class-validator";
 import type { Request } from "express";
 import { AuthService, type AuthContext, type RequestMeta } from "./auth.service";
 import { CurrentAuth, SignedIn } from "./staff.guard";
 
 export class LoginDto implements LoginRequest {
-  @IsEmail()
+  @IsString()
   @MaxLength(254)
-  email!: string;
+  login!: string;
 
   @IsString()
   @MaxLength(200)
@@ -42,7 +42,7 @@ export class AuthController {
   @Post("login")
   @HttpCode(200)
   login(@Body() dto: LoginDto, @Req() req: Request): Promise<SessionView> {
-    return this.auth.login(dto.email, dto.password, meta(req));
+    return this.auth.login(dto.login, dto.password, meta(req));
   }
 
   @SignedIn()

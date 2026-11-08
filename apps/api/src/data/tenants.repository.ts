@@ -14,6 +14,7 @@ export interface TenantRecord {
   paymentCurrencies: string[];
   tipPercentOptions: number[];
   rateSource: "manual" | "bcv";
+  isDemo: boolean;
   createdAt: Date;
 }
 
@@ -81,14 +82,14 @@ export class TenantsRepository {
 
   async listForPlatform(): Promise<PlatformTenantView[]> {
     const { rows } = await this.pool.query(
-      `SELECT t.*, COALESCE(array_agg(u.email ORDER BY u.email) FILTER (WHERE u.id IS NOT NULL), '{}') AS owner_emails
+      `SELECT t.*, COALESCE(array_agg(u.login ORDER BY u.login) FILTER (WHERE u.id IS NOT NULL), '{}') AS owner_logins
        FROM tenants t
        LEFT JOIN memberships m ON m.tenant_id = t.id AND m.role = 'owner'
        LEFT JOIN users u ON u.id = m.user_id
        GROUP BY t.id
        ORDER BY t.created_at`,
     );
-    return rows.map((row) => toPlatformView(mapTenant(row), row.owner_emails as string[]));
+    return rows.map((row) => toPlatformView(mapTenant(row), row.owner_logins as string[]));
   }
 
   async listVenues(tenantId: string): Promise<VenueView[]> {
@@ -133,7 +134,7 @@ export class TenantsRepository {
   }
 }
 
-export function toPlatformView(t: TenantRecord, ownerEmails: string[]): PlatformTenantView {
+export function toPlatformView(t: TenantRecord, ownerLogins: string[]): PlatformTenantView {
   return {
     id: t.id,
     name: t.name,
@@ -141,7 +142,7 @@ export function toPlatformView(t: TenantRecord, ownerEmails: string[]): Platform
     defaultCurrency: t.defaultCurrency,
     status: t.status,
     platformFeeBps: t.platformFeeBps,
-    ownerEmails,
+    ownerLogins,
     createdAt: t.createdAt.toISOString(),
   };
 }
@@ -157,6 +158,7 @@ function mapTenant(row: Record<string, unknown>): TenantRecord {
     paymentCurrencies: row.payment_currencies as string[],
     tipPercentOptions: row.tip_percent_options as number[],
     rateSource: row.rate_source as "manual" | "bcv",
+    isDemo: row.is_demo as boolean,
     createdAt: row.created_at as Date,
   };
 }

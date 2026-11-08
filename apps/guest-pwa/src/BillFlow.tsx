@@ -188,7 +188,10 @@ export function BillFlow({
     go(next === "full" ? "checkout" : next === "items" ? "items" : "shares");
   }
 
-  const errorBanner = (error !== null || loadError !== null) && (
+  // A 404 with the bill on screen means the waiter closed the table, not a lost connection.
+  const connectionLost = loadError !== null && !(loadError instanceof ApiError && loadError.status === 404);
+  const fullyPaid = bill.paidMinor >= bill.totalMinor;
+  const errorBanner = (error !== null || connectionLost) && (
     <div className="banner banner-bad" role="alert">
       {error !== null ? errorText(error, t) : t.connectionLost}
     </div>
@@ -210,7 +213,7 @@ export function BillFlow({
     return (
       <PaymentDone
         receipt={receipts.find((r) => r.paymentId === payment.id) ?? null}
-        billFullyPaid={bill.status === "paid"}
+        billFullyPaid={fullyPaid}
         onBack={() => setPayment(null)}
       />
     );
@@ -279,7 +282,7 @@ export function BillFlow({
         {errorBanner}
         {ended && <div className="banner banner-warn">{ended}</div>}
         <BillCard view={view} />
-        {bill.status === "paid" && (
+        {fullyPaid && (
           <section className="paid-note">
             <span className="tick">
               <IconCheck size={28} />
@@ -290,7 +293,7 @@ export function BillFlow({
             </div>
           </section>
         )}
-        {bill.status === "closed" && (
+        {bill.status === "closed" && !fullyPaid && (
           <section className="paid-note">
             <div>
               <h2>{t.billClosedTitle}</h2>

@@ -1,7 +1,7 @@
 export const APP_CONFIG = Symbol("APP_CONFIG");
 
 export type NodeEnv = "development" | "production" | "test";
-export type PosConnectorType = "mock";
+export type PosConnectorType = "mock" | "demo";
 export type PaymentProviderType = "mock" | "stripe";
 
 export interface AppConfig {
@@ -46,7 +46,7 @@ export interface AppConfig {
 export type MockPaymentFlow = "instant" | "manual";
 
 const NODE_ENVS: readonly NodeEnv[] = ["development", "production", "test"];
-const POS_CONNECTOR_TYPES: readonly PosConnectorType[] = ["mock"];
+const POS_CONNECTOR_TYPES: readonly PosConnectorType[] = ["mock", "demo"];
 const PAYMENT_PROVIDER_TYPES: readonly PaymentProviderType[] = ["mock", "stripe"];
 const MOCK_PAYMENT_FLOWS: readonly MockPaymentFlow[] = ["instant", "manual"];
 const BOOLEANS = ["true", "false"] as const;

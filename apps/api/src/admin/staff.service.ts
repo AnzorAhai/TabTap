@@ -1,7 +1,7 @@
 import { ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import type { InviteLinkView, InviteStaffResult, StaffMemberView, StaffRole } from "@tabtap/shared";
 import { Pool } from "pg";
-import { AuthService, normalizeEmail } from "../auth/auth.service";
+import { AuthService, normalizeLogin } from "../auth/auth.service";
 import type { TenantAccess } from "../auth/staff.guard";
 import { UsersRepository } from "../data/users.repository";
 import { DB_POOL } from "../database/database.module";
@@ -26,20 +26,20 @@ export class StaffService {
   async invite(
     access: TenantAccess,
     invitedBy: string,
-    input: { email: string; role: StaffRole; name?: string },
+    input: { login: string; role: StaffRole; name?: string },
   ): Promise<InviteStaffResult> {
     assertCanManage(access.role, input.role);
-    const email = normalizeEmail(input.email);
+    const login = normalizeLogin(input.login);
     const inviteLink = await withTransaction(this.pool, async (db) => {
-      const user = await this.users.findOrCreate(db, email, input.name?.trim() ?? "");
+      const user = await this.users.findOrCreate(db, login, input.name?.trim() ?? "");
       if (!user.isActive) throw new ConflictException("This account is disabled");
       if (!(await this.users.addMembership(db, user.id, access.tenantId, input.role))) {
-        throw new ConflictException(`${email} already works at this restaurant`);
+        throw new ConflictException(`${login} already works at this restaurant`);
       }
       // People who already have a password (e.g. at another restaurant) just sign in.
       return user.passwordHash ? null : this.auth.createInviteLink(db, user, invitedBy, "invite");
     });
-    const member = (await this.list(access.tenantId)).find((m) => m.email === email)!;
+    const member = (await this.list(access.tenantId)).find((m) => m.login === login)!;
     return { member, inviteLink };
   }
 
