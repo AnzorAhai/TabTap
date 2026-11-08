@@ -13,6 +13,10 @@ export interface AppConfig {
   corsOrigins: string[];
   /** Base URL of the guest app, used to build table QR links. */
   guestAppUrl: string;
+  /** Base URL of the admin panel, used to build invite / password links. */
+  adminAppUrl: string;
+  /** How long a staff sign-in lasts. */
+  sessionTtlDays: number;
   /** Off only in tests that fire many requests in a burst. */
   rateLimitEnabled: boolean;
   /** Requests per minute per client IP, applied to every route unless overridden. */
@@ -21,11 +25,6 @@ export interface AppConfig {
   paymentHoldMinutes: number;
   /** Expiry sweeper and POS sync worker; off in tests, which drive them directly. */
   backgroundJobs: boolean;
-  /**
-   * Bearer token for admin write endpoints until staff accounts exist.
-   * Unset = those endpoints are disabled.
-   */
-  adminApiToken?: string;
   posConnectorType: PosConnectorType;
   paymentProviderType: PaymentProviderType;
   mockPaymentFlow: MockPaymentFlow;
@@ -70,6 +69,16 @@ function oneOf<T extends string>(
     return fallback;
   }
   return value as T;
+}
+
+function baseUrl(problems: string[], name: string, raw: string | undefined, fallback: string): string {
+  const value = (raw?.trim() || fallback).replace(/\/+$/, "");
+  try {
+    new URL(value);
+  } catch {
+    problems.push(`${name} is not a valid URL (got "${value}")`);
+  }
+  return value;
 }
 
 function positiveInt(problems: string[], name: string, raw: string | undefined, fallback: number): number {
@@ -125,11 +134,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     corsOrigins = DEV_CORS_ORIGINS;
   }
 
-  const guestAppUrl = (env.GUEST_APP_URL?.trim() || "http://localhost:5173").replace(/\/+$/, "");
-  try {
-    new URL(guestAppUrl);
-  } catch {
-    problems.push(`GUEST_APP_URL is not a valid URL (got "${guestAppUrl}")`);
+  const guestAppUrl = baseUrl(problems, "GUEST_APP_URL", env.GUEST_APP_URL, "http://localhost:5173");
+  const adminAppUrl = baseUrl(problems, "ADMIN_APP_URL", env.ADMIN_APP_URL, "http://localhost:5174");
+  if (isProduction && !env.ADMIN_APP_URL?.trim()) {
+    problems.push("ADMIN_APP_URL is required in production (the admin panel's URL, used in invite links)");
   }
 
   const paymentProviderType = oneOf(
@@ -144,11 +152,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     problems.push("STRIPE_SECRET_KEY is required when PAYMENT_PROVIDER_TYPE=stripe");
   }
 
-  const adminApiToken = env.ADMIN_API_TOKEN?.trim() || undefined;
-  if (adminApiToken && adminApiToken.length < 32) {
-    problems.push("ADMIN_API_TOKEN must be at least 32 characters (e.g. `openssl rand -hex 32`)");
-  }
-
   const config: AppConfig = {
     nodeEnv,
     isProduction,
@@ -156,11 +159,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     databaseUrl,
     corsOrigins,
     guestAppUrl,
+    adminAppUrl,
+    sessionTtlDays: positiveInt(problems, "SESSION_TTL_DAYS", env.SESSION_TTL_DAYS, 14),
     rateLimitEnabled: oneOf(problems, "RATE_LIMIT_ENABLED", env.RATE_LIMIT_ENABLED, BOOLEANS, "true") === "true",
     rateLimitPerMinute: positiveInt(problems, "RATE_LIMIT_PER_MINUTE", env.RATE_LIMIT_PER_MINUTE, 300),
     paymentHoldMinutes: positiveInt(problems, "PAYMENT_HOLD_MINUTES", env.PAYMENT_HOLD_MINUTES, 10),
     backgroundJobs: oneOf(problems, "BACKGROUND_JOBS", env.BACKGROUND_JOBS, BOOLEANS, "true") === "true",
-    adminApiToken,
     posConnectorType: oneOf(problems, "POS_CONNECTOR_TYPE", env.POS_CONNECTOR_TYPE, POS_CONNECTOR_TYPES, "mock"),
     paymentProviderType,
     mockPaymentFlow: oneOf(problems, "MOCK_PAYMENT_FLOW", env.MOCK_PAYMENT_FLOW, MOCK_PAYMENT_FLOWS, "instant"),

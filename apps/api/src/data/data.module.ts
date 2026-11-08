@@ -6,7 +6,10 @@ import { ExchangeRatesRepository } from "./exchange-rates.repository";
 import { PaymentsRepository } from "./payments.repository";
 import { PosSyncRepository } from "./pos-sync.repository";
 import { ReceiptsRepository } from "./receipts.repository";
+import { SessionsRepository } from "./sessions.repository";
 import { TablesRepository } from "./tables.repository";
+import { TenantsRepository } from "./tenants.repository";
+import { UsersRepository } from "./users.repository";
 
 const providers = [
   TablesRepository,
@@ -16,6 +19,9 @@ const providers = [
   ReceiptsRepository,
   ExchangeRatesRepository,
   PosSyncRepository,
+  TenantsRepository,
+  UsersRepository,
+  SessionsRepository,
   BillEventsService,
 ];
 

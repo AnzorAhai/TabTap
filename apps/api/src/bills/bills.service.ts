@@ -31,7 +31,7 @@ export class BillsService {
   /** What a guest sees after scanning a table's QR code; refreshes the bill from the POS first. */
   async getTableView(qrToken: string): Promise<TableBillView> {
     const table = await this.tables.findContextByQrToken(qrToken);
-    if (!table || !table.isActive) throw new NotFoundException("Table not found");
+    if (!table || !table.isActive || !table.tenantActive) throw new NotFoundException("Table not found");
     const posBill = await this.pos.getOpenBill(table.posTableRef);
     if (!posBill) throw new NotFoundException("There is no open bill on this table");
     const { bill, changed } = await this.bills.upsertFromPos(table, posBill);

@@ -120,3 +120,158 @@ section {
   background: #f1f1f1;
   color: #666;
 }
+
+.narrow {
+  max-width: 440px;
+}
+
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.topbar h1 {
+  margin: 0 8px 0 0;
+}
+
+.mode-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.tab {
+  background: #fff;
+  color: #111;
+  border: 1px solid #ddd;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.tab-active {
+  background: #111;
+  color: #fff;
+  border-color: #111;
+}
+
+button {
+  background: #111;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+button.link {
+  background: none;
+  color: #0b5cad;
+  padding: 2px 4px;
+  font-size: 13px;
+}
+
+button.danger,
+button.link.danger {
+  color: #c0392b;
+}
+
+input,
+select {
+  padding: 7px 9px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 14px;
+  min-width: 0;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+}
+
+.form.inline {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.form.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+.muted {
+  color: #666;
+  font-size: 14px;
+}
+
+.small {
+  font-size: 12px;
+}
+
+.error {
+  background: #fdecea;
+  color: #c0392b;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 14px;
+  margin: 8px 0;
+}
+
+.invite-link {
+  background: #eef6ee;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 12px;
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.invite-link .row {
+  display: flex;
+  gap: 8px;
+}
+
+.invite-link input {
+  flex: 1;
+}
+
+.card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.table-card.inactive {
+  opacity: 0.6;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.actions-cell {
+  white-space: nowrap;
+}

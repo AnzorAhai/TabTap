@@ -12,6 +12,8 @@ export interface TableContext {
   isActive: boolean;
   tenantId: string;
   tenantName: string;
+  /** False while the restaurant is suspended by the platform: guests can't open its tables. */
+  tenantActive: boolean;
   venueId: string;
   venueName: string;
   platformFeeBps: number;

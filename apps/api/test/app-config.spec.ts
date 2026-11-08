@@ -32,21 +32,24 @@ describe("loadConfig", () => {
       DATABASE_URL: "postgresql://db/tabtap",
       CORS_ORIGINS: "https://guest.example.com, https://admin.example.com",
       GUEST_APP_URL: "https://guest.example.com/",
+      ADMIN_APP_URL: "https://admin.example.com",
     });
 
     expect(config.isProduction).toBe(true);
     expect(config.port).toBe(10000);
     expect(config.corsOrigins).toEqual(["https://guest.example.com", "https://admin.example.com"]);
     expect(config.guestAppUrl).toBe("https://guest.example.com");
+    expect(config.adminAppUrl).toBe("https://admin.example.com");
+    expect(config.sessionTtlDays).toBe(14);
   });
 
   it("requires DATABASE_URL", () => {
     expect(problemsOf({})).toEqual([expect.stringContaining("DATABASE_URL")]);
   });
 
-  it("requires explicit CORS origins in production instead of allowing localhost", () => {
+  it("requires explicit CORS origins and admin URL in production instead of localhost defaults", () => {
     const problems = problemsOf({ NODE_ENV: "production", DATABASE_URL: "postgresql://db/tabtap" });
-    expect(problems).toEqual([expect.stringContaining("CORS_ORIGINS")]);
+    expect(problems).toEqual([expect.stringContaining("CORS_ORIGINS"), expect.stringContaining("ADMIN_APP_URL")]);
   });
 
   it("reports every problem at once", () => {

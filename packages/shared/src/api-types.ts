@@ -138,10 +138,28 @@ export interface BillEvent {
 
 export interface AdminTableView {
   id: string;
+  venueId: string;
   label: string;
+  /** Random token in the table's QR code; rotating it invalidates printed codes. */
   qrToken: string;
+  /** The POS's own id for this table (how bills are looked up). */
+  posTableRef: string;
   isActive: boolean;
   guestUrl: string;
+}
+
+/** POST /tenants/:tenantId/tables */
+export interface CreateTableRequest {
+  venueId: string;
+  label: string;
+  posTableRef: string;
+}
+
+/** PATCH /tenants/:tenantId/tables/:tableId */
+export interface UpdateTableRequest {
+  label?: string;
+  posTableRef?: string;
+  isActive?: boolean;
 }
 
 export interface AdminPaymentView {
@@ -172,4 +190,151 @@ export interface SetExchangeRateRequest {
   baseCurrency: string;
   quoteCurrency: string;
   rate: string;
+}
+
+// ---------------------------------------------------------------------------
+// Staff accounts, sessions and restaurant management (admin panel).
+
+export type StaffRole = "owner" | "manager" | "waiter";
+
+export interface MembershipView {
+  tenantId: string;
+  tenantName: string;
+  role: StaffRole;
+}
+
+export interface MeView {
+  userId: string;
+  email: string;
+  name: string;
+  /** TabTap staff: may manage every restaurant and the platform settings. */
+  isPlatformAdmin: boolean;
+  memberships: MembershipView[];
+}
+
+/** Returned by login and by accepting an invite. Send `Authorization: Bearer <token>`. */
+export interface SessionView {
+  token: string;
+  expiresAt: string;
+  me: MeView;
+}
+
+/** POST /auth/login */
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+/** GET /auth/invites/:token — what the set-password page shows. */
+export interface InviteInfoView {
+  email: string;
+  name: string;
+  purpose: "invite" | "password_reset";
+  expiresAt: string;
+}
+
+/** POST /auth/invites/:token/accept */
+export interface AcceptInviteRequest {
+  password: string;
+  name?: string;
+}
+
+/** A one-time link that lets someone set their password. Shown once; pass it on yourself. */
+export interface InviteLinkView {
+  userId: string;
+  email: string;
+  url: string;
+  expiresAt: string;
+}
+
+export interface TenantSettingsView {
+  id: string;
+  name: string;
+  country: string;
+  defaultCurrency: string;
+  status: "active" | "suspended";
+  platformFeeBps: number;
+  paymentCurrencies: string[];
+  tipPercentOptions: number[];
+  /** The caller's role here; platform admins act as owners. */
+  role: StaffRole;
+}
+
+/** PATCH /tenants/:tenantId/settings */
+export interface UpdateTenantSettingsRequest {
+  name?: string;
+  paymentCurrencies?: string[];
+  tipPercentOptions?: number[];
+}
+
+export interface VenueView {
+  id: string;
+  name: string;
+  address: string | null;
+  timezone: string;
+}
+
+/** POST /tenants/:tenantId/venues, PATCH .../venues/:venueId */
+export interface VenueRequest {
+  name?: string;
+  address?: string | null;
+  timezone?: string;
+}
+
+export interface StaffMemberView {
+  userId: string;
+  email: string;
+  name: string;
+  role: StaffRole;
+  /** invited = hasn't set a password yet. */
+  status: "invited" | "active" | "disabled";
+  lastLoginAt: string | null;
+}
+
+/** POST /tenants/:tenantId/staff */
+export interface InviteStaffRequest {
+  email: string;
+  role: StaffRole;
+  name?: string;
+}
+
+/** The invite link is null when the person already has an account (they just sign in). */
+export interface InviteStaffResult {
+  member: StaffMemberView;
+  inviteLink: InviteLinkView | null;
+}
+
+export interface PlatformTenantView {
+  id: string;
+  name: string;
+  country: string;
+  defaultCurrency: string;
+  status: "active" | "suspended";
+  platformFeeBps: number;
+  ownerEmails: string[];
+  createdAt: string;
+}
+
+/** POST /platform/tenants */
+export interface CreateTenantRequest {
+  name: string;
+  /** ISO 3166-1 alpha-2, e.g. "VE". */
+  country: string;
+  /** Currency the POS bills in, e.g. "USD". */
+  defaultCurrency: string;
+  venueName: string;
+  /** IANA time zone, e.g. "America/Caracas". */
+  timezone: string;
+  ownerEmail: string;
+}
+
+export interface CreateTenantResult {
+  tenant: PlatformTenantView;
+  ownerInvite: InviteLinkView | null;
+}
+
+/** PATCH /platform/tenants/:tenantId */
+export interface UpdatePlatformTenantRequest {
+  platformFeeBps?: number;
+  status?: "active" | "suspended";
 }

@@ -6,7 +6,6 @@ import {
   Headers,
   HttpCode,
   Param,
-  ParseUUIDPipe,
   Post,
   Req,
   type RawBodyRequest,
@@ -16,6 +15,7 @@ import type { PaymentView, ReceiptView } from "@tabtap/shared";
 import type { Request } from "express";
 import { CreatePaymentDto, MockConfirmDto } from "./dto/create-payment.dto";
 import { PaymentsService } from "./payments.service";
+import { ParseIdPipe } from "../common/ids";
 
 const IDEMPOTENCY_KEY = /^[A-Za-z0-9_-]{8,100}$/;
 
@@ -31,7 +31,7 @@ export class PaymentsController {
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post("bills/:billId/payments")
   create(
-    @Param("billId", ParseUUIDPipe) billId: string,
+    @Param("billId", ParseIdPipe) billId: string,
     @Headers("idempotency-key") idempotencyKey: string | undefined,
     @Body() dto: CreatePaymentDto,
   ): Promise<PaymentView> {
@@ -42,25 +42,25 @@ export class PaymentsController {
   }
 
   @Get("payments/:paymentId")
-  get(@Param("paymentId", ParseUUIDPipe) paymentId: string): Promise<PaymentView> {
+  get(@Param("paymentId", ParseIdPipe) paymentId: string): Promise<PaymentView> {
     return this.payments.getPayment(paymentId);
   }
 
   @Post("payments/:paymentId/cancel")
   @HttpCode(200)
-  cancel(@Param("paymentId", ParseUUIDPipe) paymentId: string): Promise<PaymentView> {
+  cancel(@Param("paymentId", ParseIdPipe) paymentId: string): Promise<PaymentView> {
     return this.payments.cancel(paymentId);
   }
 
   /** Mock gateway only (404 otherwise): confirm or decline a pending payment. */
   @Post("payments/:paymentId/mock-confirm")
   @HttpCode(200)
-  mockConfirm(@Param("paymentId", ParseUUIDPipe) paymentId: string, @Body() dto: MockConfirmDto): Promise<PaymentView> {
+  mockConfirm(@Param("paymentId", ParseIdPipe) paymentId: string, @Body() dto: MockConfirmDto): Promise<PaymentView> {
     return this.payments.mockConfirm(paymentId, dto.outcome);
   }
 
   @Get("payments/:paymentId/receipt")
-  getReceipt(@Param("paymentId", ParseUUIDPipe) paymentId: string): Promise<ReceiptView> {
+  getReceipt(@Param("paymentId", ParseIdPipe) paymentId: string): Promise<ReceiptView> {
     return this.payments.getReceipt(paymentId);
   }
 
