@@ -73,13 +73,13 @@ describe("API over HTTP", () => {
     const res = await http()
       .post(`/bills/${billId}/payments`)
       .set("Idempotency-Key", "test-key-123")
-      .send({ mode: "full", currency: "USD", sneaky: true })
+      .send({ mode: "full", method: "card", sneaky: true })
       .expect(400);
     expect(res.body.message).toEqual(["property sneaky should not exist"]);
     await http()
       .post(`/bills/${billId}/payments`)
       .set("Idempotency-Key", "test-key-123")
-      .send({ mode: "everything", currency: "USD" })
+      .send({ mode: "everything", method: "card" })
       .expect(400);
     expect(pool.query).not.toHaveBeenCalled();
   });

@@ -1,8 +1,10 @@
 import {
+  basisPointsOf,
   convertMinor,
   formatMoney,
   percentOf,
   type ClaimState,
+  type PaymentMethod,
   type PaymentMode,
   type PaymentView,
   type ReceiptView,
@@ -10,6 +12,8 @@ import {
 } from "@tabtap/shared";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "./api";
+import { PendingPayment } from "./PendingPayment";
+import { METHOD_LABEL } from "./methods";
 import { loadReceipts, saveReceipt } from "./receipts";
 import { useTableBill } from "./useTableBill";
 
@@ -17,8 +21,6 @@ import { useTableBill } from "./useTableBill";
 // (es / en / ru) come in Phase 4.
 
 const LOCALE = "ru-RU";
-/** The demo gateway's "bank confirmed / declined" buttons (dev builds, or when enabled for a demo). */
-const DEMO_PAYMENT_CONTROLS = import.meta.env.DEV || import.meta.env.VITE_DEMO_PAYMENT_CONTROLS === "true";
 
 const MODE_LABEL: Record<PaymentMode, string> = { full: "Весь счёт", items: "Мои блюда", shares: "Поровну" };
 const CLAIM_LABEL: Record<ClaimState, string> = { available: "", reserved: "Оплачивается", paid: "Оплачено" };
@@ -57,7 +59,7 @@ function TableScreen({ qrToken }: { qrToken: string }) {
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [shareCount, setShareCount] = useState(1);
   const [tipPercent, setTipPercent] = useState(0);
-  const [currency, setCurrency] = useState<string | null>(null);
+  const [chosenMethod, setMethod] = useState<PaymentMethod | null>(null);
   const [payment, setPayment] = useState<PaymentView | null>(null);
   const [retryKey, setRetryKey] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -101,8 +103,7 @@ function TableScreen({ qrToken }: { qrToken: string }) {
   if (!view) return <main className="screen">Ошибка: {loadError}</main>;
 
   const { bill } = view;
-  const payCurrency = currency ?? bill.currency;
-  const currencyOption = view.paymentCurrencies.find((c) => c.currency === payCurrency) ?? view.paymentCurrencies[0];
+  const methodOption = view.paymentMethods.find((m) => m.method === chosenMethod) ?? view.paymentMethods[0] ?? null;
   const availableShares = view.equalSplit?.shares.filter((s) => s.state === "available") ?? [];
 
   const amountMinor =
@@ -117,11 +118,15 @@ function TableScreen({ qrToken }: { qrToken: string }) {
             bill.remainingMinor,
           );
   const tipMinor = percentOf(amountMinor, tipPercent);
-  const chargeMinor = currencyOption.rate
-    ? convertMinor(amountMinor + tipMinor, bill.currency, currencyOption.currency, currencyOption.rate)
+  // Preview only: the server computes the real amounts the same way.
+  const convertedMinor = methodOption?.rate
+    ? convertMinor(amountMinor + tipMinor, bill.currency, methodOption.currency, methodOption.rate)
     : amountMinor + tipMinor;
+  const surchargeMinor = methodOption ? basisPointsOf(convertedMinor, methodOption.surchargeBps) : 0;
+  const chargeMinor = convertedMinor + surchargeMinor;
+  const payCurrency = methodOption?.currency ?? bill.currency;
   const paymentInProgress = payment?.status === "pending";
-  const canPay = view.modes[mode] && amountMinor > 0 && !busy && !paymentInProgress;
+  const canPay = view.modes[mode] && amountMinor > 0 && !busy && !paymentInProgress && methodOption !== null;
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -149,7 +154,7 @@ function TableScreen({ qrToken }: { qrToken: string }) {
           itemIds: mode === "items" ? [...selectedItems] : undefined,
           shareCount: mode === "shares" ? shareCount : undefined,
           tipPercent,
-          currency: payCurrency,
+          method: methodOption.method,
         },
         key,
       );
@@ -214,39 +219,7 @@ function TableScreen({ qrToken }: { qrToken: string }) {
       {(error ?? loadError) && <div className="error-banner">{error ?? loadError}</div>}
 
       {payment && payment.status === "pending" && (
-        <section className="pending">
-          <h2>Ждём подтверждения оплаты…</h2>
-          <p className="muted">
-            {money(payment.chargeAmountMinor, payment.chargeCurrency)} · резерв до{" "}
-            {payment.expiresAt && new Date(payment.expiresAt).toLocaleTimeString(LOCALE, { timeStyle: "short" })}
-          </p>
-          <div className="actions">
-            {DEMO_PAYMENT_CONTROLS && (
-              <>
-                <button
-                  disabled={busy}
-                  onClick={() => void run(async () => onPaymentUpdate(await api.mockConfirm(payment.id, "succeeded")))}
-                >
-                  Банк подтвердил (демо)
-                </button>
-                <button
-                  className="secondary"
-                  disabled={busy}
-                  onClick={() => void run(async () => onPaymentUpdate(await api.mockConfirm(payment.id, "failed")))}
-                >
-                  Банк отклонил (демо)
-                </button>
-              </>
-            )}
-            <button
-              className="secondary"
-              disabled={busy}
-              onClick={() => void run(async () => onPaymentUpdate(await api.cancelPayment(payment.id)))}
-            >
-              Отменить
-            </button>
-          </div>
-        </section>
+        <PendingPayment payment={payment} busy={busy} run={run} onUpdate={onPaymentUpdate} />
       )}
 
       {payment && PAYMENT_ENDED[payment.status] && <div className="notice">{PAYMENT_ENDED[payment.status]}</div>}
@@ -328,31 +301,39 @@ function TableScreen({ qrToken }: { qrToken: string }) {
                 ))}
               </div>
 
-              {view.paymentCurrencies.length > 1 && (
-                <div className="tip-picker">
-                  <span className="tip-label">Валюта:</span>
-                  {view.paymentCurrencies.map((c) => (
-                    <button
-                      key={c.currency}
-                      type="button"
-                      className={c.currency === payCurrency ? "tip-option tip-option-active" : "tip-option"}
-                      onClick={() => setCurrency(c.currency)}
-                    >
-                      {c.currency}
-                    </button>
-                  ))}
-                  {currencyOption.rate && (
-                    <span className="tip-amount">
-                      1 {bill.currency} = {currencyOption.rate} {currencyOption.currency}
-                    </span>
-                  )}
-                </div>
+              <div className="methods">
+                <span className="tip-label">Способ оплаты:</span>
+                {view.paymentMethods.map((m) => (
+                  <button
+                    key={m.method}
+                    type="button"
+                    className={m.method === methodOption?.method ? "tip-option tip-option-active" : "tip-option"}
+                    onClick={() => setMethod(m.method)}
+                  >
+                    {METHOD_LABEL[m.method]}
+                  </button>
+                ))}
+                {view.paymentMethods.length === 0 && (
+                  <span className="muted">Ресторан пока не принимает оплату здесь.</span>
+                )}
+              </div>
+              {methodOption?.rate && (
+                <p className="muted small">
+                  Курс: 1 {bill.currency} = {methodOption.rate} {methodOption.currency}
+                </p>
               )}
 
               <div className="pay-bar">
                 <span>
                   К оплате: <strong>{money(chargeMinor, payCurrency)}</strong>
                   {tipMinor > 0 && <span className="muted"> (чаевые {money(tipMinor, bill.currency)})</span>}
+                  {surchargeMinor > 0 && (
+                    <span className="muted">
+                      {" "}
+                      (вкл. IGTF {(methodOption.surchargeBps / 100).toLocaleString(LOCALE)}%:{" "}
+                      {money(surchargeMinor, payCurrency)})
+                    </span>
+                  )}
                 </span>
                 <button disabled={!canPay} onClick={() => void handlePay()}>
                   {busy ? "Оплачиваем…" : "Оплатить"}

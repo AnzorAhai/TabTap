@@ -1,5 +1,11 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query } from "@nestjs/common";
+import { PaymentMethod } from "@tabtap/shared";
 import type {
+  FeeReportView,
+  PaymentView,
+  RejectPaymentRequest,
+  TenantPaymentMethodView,
+  UpdatePaymentMethodsRequest,
   AdminPaymentView,
   AdminTableView,
   CreateTableRequest,
@@ -19,12 +25,13 @@ import type {
 import {
   ArrayMaxSize,
   ArrayMinSize,
-  ArrayUnique,
   IsArray,
   IsBoolean,
   IsEmail,
   IsIn,
   IsInt,
+  IsObject,
+  ValidateNested,
   IsOptional,
   IsString,
   Length,
@@ -36,7 +43,10 @@ import {
   ValidatorConstraint,
   type ValidatorConstraintInterface,
 } from "class-validator";
+import { Type } from "class-transformer";
 import type { AuthContext } from "../auth/auth.service";
+import { PaymentAdminService } from "./payment-admin.service";
+import { currentMonth } from "./months";
 import { AnyTenantRole, CurrentAuth, CurrentTenant, TenantRoles, type TenantAccess } from "../auth/staff.guard";
 import { RestaurantService } from "./restaurant.service";
 import { StaffService } from "./staff.service";
@@ -67,11 +77,8 @@ export class UpdateSettingsDto implements UpdateTenantSettingsRequest {
   name?: string;
 
   @IsOptional()
-  @IsArray()
-  @ArrayMaxSize(5)
-  @ArrayUnique()
-  @Matches(/^[A-Z]{3}$/, { each: true, message: "each payment currency must be an uppercase ISO 4217 code" })
-  paymentCurrencies?: string[];
+  @IsIn(["manual", "bcv"])
+  rateSource?: "manual" | "bcv";
 
   @IsOptional()
   @IsArray()
@@ -170,6 +177,43 @@ export class InviteStaffDto implements InviteStaffRequest {
   name?: string;
 }
 
+export class PaymentMethodDto implements TenantPaymentMethodView {
+  @IsIn(Object.values(PaymentMethod))
+  method!: PaymentMethod;
+
+  @IsBoolean()
+  enabled!: boolean;
+
+  /** Extra charge in basis points (IGTF 3% = 300), at most 10%. */
+  @IsInt()
+  @Min(0)
+  @Max(1000)
+  surchargeBps!: number;
+
+  @IsObject()
+  details!: Record<string, string>;
+
+  @IsOptional()
+  @IsInt()
+  sortOrder!: number;
+}
+
+export class UpdatePaymentMethodsDto implements UpdatePaymentMethodsRequest {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(10)
+  @ValidateNested({ each: true })
+  @Type(() => PaymentMethodDto)
+  methods!: PaymentMethodDto[];
+}
+
+export class RejectPaymentDto implements RejectPaymentRequest {
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  reason?: string;
+}
+
 export class ChangeRoleDto {
   @IsIn(ROLES)
   role!: StaffRole;
@@ -181,7 +225,61 @@ export class RestaurantController {
   constructor(
     private readonly restaurant: RestaurantService,
     private readonly staff: StaffService,
+    private readonly paymentAdmin: PaymentAdminService,
   ) {}
+
+  @AnyTenantRole()
+  @Get("payment-methods")
+  paymentMethods(@CurrentTenant() access: TenantAccess): Promise<TenantPaymentMethodView[]> {
+    return this.paymentAdmin.listMethods(access.tenantId);
+  }
+
+  @TenantRoles("owner", "manager")
+  @Put("payment-methods")
+  updatePaymentMethods(
+    @CurrentTenant() access: TenantAccess,
+    @Body() dto: UpdatePaymentMethodsDto,
+  ): Promise<TenantPaymentMethodView[]> {
+    return this.paymentAdmin.replaceMethods(access.tenantId, dto.methods);
+  }
+
+  /** Staff saw the money arrive (cash in hand, transfer in the bank app). Any role: waiters take cash. */
+  @AnyTenantRole()
+  @Post("payments/:paymentId/confirm")
+  @HttpCode(200)
+  confirmPayment(
+    @CurrentTenant() access: TenantAccess,
+    @CurrentAuth() auth: AuthContext,
+    @Param("paymentId", ParseIdPipe) paymentId: string,
+  ): Promise<PaymentView> {
+    return this.paymentAdmin.confirm(access.tenantId, paymentId, auth.userId);
+  }
+
+  @AnyTenantRole()
+  @Post("payments/:paymentId/reject")
+  @HttpCode(200)
+  rejectPayment(
+    @CurrentTenant() access: TenantAccess,
+    @CurrentAuth() auth: AuthContext,
+    @Param("paymentId", ParseIdPipe) paymentId: string,
+    @Body() dto: RejectPaymentDto,
+  ): Promise<PaymentView> {
+    return this.paymentAdmin.reject(access.tenantId, paymentId, auth.userId, dto.reason);
+  }
+
+  /** Platform fees for a month (default: this month), to be invoiced to the restaurant. */
+  @TenantRoles("owner", "manager")
+  @Get("fees")
+  fees(@CurrentTenant() access: TenantAccess, @Query("month") month?: string): Promise<FeeReportView> {
+    return this.paymentAdmin.feeReport(access.tenantId, month ?? currentMonth());
+  }
+
+  /** Fetch the official BCV rate now and make it current. */
+  @TenantRoles("owner", "manager")
+  @Post("exchange-rates/bcv")
+  refreshBcvRate(@CurrentTenant() access: TenantAccess): Promise<ExchangeRateView> {
+    return this.paymentAdmin.refreshBcvRate(access.tenantId);
+  }
 
   @AnyTenantRole()
   @Get()

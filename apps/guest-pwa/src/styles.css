@@ -277,3 +277,57 @@ button.secondary {
   gap: 8px;
   margin: 8px 0;
 }
+
+.methods {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.pay-to {
+  margin: 8px 0;
+  padding: 10px 12px;
+  background: #f6f6f8;
+  border-radius: 8px;
+}
+
+.pay-to div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+}
+
+.pay-to dt {
+  color: #666;
+}
+
+.pay-to dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: right;
+  user-select: all;
+}
+
+.proof-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.proof-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+}
+
+.proof-form input {
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 15px;
+}

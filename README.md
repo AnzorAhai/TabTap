@@ -31,8 +31,8 @@ and a payment provider that moves no real money.
   in progress (`pending`) holds its lines/shares for `PAYMENT_HOLD_MINUTES`; if it fails, is
   canceled or the hold expires, they become available again. Overpaying is impossible, and
   concurrent requests are serialized per bill.
-- Bills are in the POS currency (USD). Guests may also pay in another currency the restaurant
-  accepts (VES) at its current exchange rate, which the payment records.
+- Bills are in the POS currency (USD). The guest picks a **payment method**; the method decides
+  the currency, and VES amounts use the restaurant's current USD→VES rate (stored on the payment).
 - `POST /bills/:billId/payments` requires an `Idempotency-Key` header: retrying a "Pay" tap never
   charges twice. Settlement, the receipt and the POS notification are written in one transaction;
   a background worker delivers POS notifications and retries while the POS is unreachable.
@@ -40,6 +40,31 @@ and a payment provider that moves no real money.
   stream ("bill.updated" → refetch the bill).
 - The platform fee (1.5% by default, `tenants.platform_fee_bps`) is recorded on each payment's
   bill amount, tips excluded. Only platform admins can change it.
+
+## Payment methods (Venezuela)
+
+Guests pay the restaurant directly; TabTap records every payment and its fee, and the fee report
+(per restaurant and for the platform) is the basis for a monthly invoice.
+
+| Method        | Currency | Confirmed by                                                    |
+| ------------- | -------- | --------------------------------------------------------------- |
+| Card          | bill     | the payment gateway (mock today)                                |
+| Pago Móvil    | VES      | guest reports the bank reference → staff, or the demo simulator |
+| Zelle         | USD      | guest reports the confirmation → staff                          |
+| Binance Pay   | USD      | guest reports the order id → staff                              |
+| Cash USD / Bs | USD/VES  | the waiter, in the admin panel ("Деньги получены")              |
+
+Each restaurant enables methods, enters where guests send the money (bank/phone/RIF, Zelle email,
+Binance Pay ID) and an optional surcharge per method — for example IGTF 3% on foreign currency
+received outside the Venezuelan banking system, which special taxpayers must collect (check with an
+accountant). Offline payments hold the lines/shares for `PAYMENT_HOLD_MINUTES_OFFLINE` (30).
+
+The demo simulator ("simulated" verification) confirms any reported reference after
+`SIMULATED_CHECK_SECONDS` and rejects references ending in `0000`. Real bank checks (Pago Móvil
+verification APIs, Binance Pay) plug in per bank once there is a partner.
+
+Restaurants with rate source **BCV** get the official USD→VES rate from `BCV_RATE_URL` (DolarAPI
+format) every hour; staff can also take it on demand or enter a rate by hand.
 
 ## Staff access
 

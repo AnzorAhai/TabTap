@@ -1,11 +1,14 @@
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
-import type { AdminPaymentView, PaymentMode, PaymentStatus } from "@tabtap/shared";
+import type { AdminPaymentView, FeeReportRow, PaymentMethod, PaymentMode, PaymentStatus } from "@tabtap/shared";
 import { Pool } from "pg";
 import { DB_POOL } from "../database/database.module";
 import type { Queryable } from "../database/transaction";
 import { normalizeDecimal, type PaymentRecord } from "./records";
 
-export type NewPayment = Omit<PaymentRecord, "id" | "createdAt" | "settledAt" | "failureReason" | "providerRef">;
+export type NewPayment = Omit<
+  PaymentRecord,
+  "id" | "createdAt" | "settledAt" | "failureReason" | "providerRef" | "proof" | "proofSubmittedAt" | "reviewedBy"
+>;
 
 @Injectable()
 export class PaymentsRepository {
@@ -15,8 +18,8 @@ export class PaymentsRepository {
     const { rows } = await db.query(
       `INSERT INTO payments (tenant_id, bill_id, mode, status, item_ids, share_indices, amount_minor, tip_minor,
                              platform_fee_minor, currency, charge_currency, charge_amount_minor, exchange_rate,
-                             provider, idempotency_key, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+                             provider, idempotency_key, expires_at, method, surcharge_bps, surcharge_minor)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
        RETURNING *`,
       [
         p.tenantId,
@@ -35,6 +38,9 @@ export class PaymentsRepository {
         p.provider,
         p.idempotencyKey,
         p.expiresAt,
+        p.method,
+        p.surchargeBps,
+        p.surchargeMinor,
       ],
     );
     return mapPayment(rows[0]);
@@ -93,6 +99,37 @@ export class PaymentsRepository {
     return mapPayment(rows[0]);
   }
 
+  /** Stores what the guest reported for a pending proof-based payment; null if no longer pending. */
+  async submitProof(paymentId: string, proof: Record<string, string>): Promise<PaymentRecord | null> {
+    const { rows } = await this.pool.query(
+      `UPDATE payments SET proof = $2, proof_submitted_at = now(), updated_at = now()
+       WHERE id = $1 AND status = 'pending' RETURNING *`,
+      [paymentId, JSON.stringify(proof)],
+    );
+    return rows.length ? mapPayment(rows[0]) : null;
+  }
+
+  async setReviewedBy(db: Queryable, paymentId: string, userId: string): Promise<void> {
+    await db.query(`UPDATE payments SET reviewed_by = $2 WHERE id = $1`, [paymentId, userId]);
+  }
+
+  /**
+   * Pending proof-based payments of methods set to "simulated" verification whose proof
+   * was submitted at least `afterSeconds` ago — the demo stand-in for a bank check.
+   */
+  async listDueForSimulatedCheck(afterSeconds: number): Promise<PaymentRecord[]> {
+    const { rows } = await this.pool.query(
+      `SELECT p.* FROM payments p
+       JOIN tenant_payment_methods m ON m.tenant_id = p.tenant_id AND m.method = p.method
+       WHERE p.status = 'pending' AND p.proof_submitted_at <= now() - make_interval(secs => $1)
+         AND m.details->>'verification' = 'simulated'
+       ORDER BY p.proof_submitted_at
+       LIMIT 50`,
+      [afterSeconds],
+    );
+    return rows.map(mapPayment);
+  }
+
   /** Moves a still-pending payment to a final status; returns null if it was no longer pending. */
   async finishPending(
     paymentId: string,
@@ -117,6 +154,28 @@ export class PaymentsRepository {
     return rows.map(mapPayment);
   }
 
+  /** Settled payments' bill amounts and platform fees in [from, to), per restaurant and currency. */
+  async feeReport(from: Date, to: Date, tenantId?: string): Promise<FeeReportRow[]> {
+    const { rows } = await this.pool.query(
+      `SELECT p.tenant_id, t.name AS tenant_name, p.currency, count(*)::int AS payments,
+              sum(p.amount_minor) AS bill_amount, sum(p.platform_fee_minor) AS fee
+       FROM payments p JOIN tenants t ON t.id = p.tenant_id
+       WHERE p.status = 'succeeded' AND p.settled_at >= $1 AND p.settled_at < $2
+         AND ($3::uuid IS NULL OR p.tenant_id = $3)
+       GROUP BY p.tenant_id, t.name, p.currency
+       ORDER BY t.name, p.currency`,
+      [from, to, tenantId ?? null],
+    );
+    return rows.map((r) => ({
+      tenantId: r.tenant_id,
+      tenantName: r.tenant_name,
+      currency: r.currency,
+      payments: r.payments,
+      billAmountMinor: Number(r.bill_amount),
+      feeMinor: Number(r.fee),
+    }));
+  }
+
   async listByTenant(tenantId: string, limit = 100): Promise<AdminPaymentView[]> {
     const { rows } = await this.pool.query(
       `SELECT p.*, t.label AS table_label
@@ -139,7 +198,11 @@ export class PaymentsRepository {
       currency: row.currency,
       chargeAmountMinor: Number(row.charge_amount_minor),
       chargeCurrency: row.charge_currency,
+      surchargeMinor: Number(row.surcharge_minor),
+      method: row.method as PaymentMethod,
       status: row.status as PaymentStatus,
+      proof: (row.proof as Record<string, string> | null) ?? null,
+      awaitingReview: row.status === "pending" && row.method !== "card",
       createdAt: (row.created_at as Date).toISOString(),
     }));
   }
@@ -161,6 +224,12 @@ function mapPayment(row: Record<string, unknown>): PaymentRecord {
     chargeCurrency: row.charge_currency as string,
     chargeAmountMinor: Number(row.charge_amount_minor),
     exchangeRate: row.exchange_rate === null ? null : normalizeDecimal(row.exchange_rate as string),
+    method: row.method as PaymentMethod,
+    surchargeBps: Number(row.surcharge_bps),
+    surchargeMinor: Number(row.surcharge_minor),
+    proof: (row.proof as Record<string, string> | null) ?? null,
+    proofSubmittedAt: (row.proof_submitted_at as Date | null) ?? null,
+    reviewedBy: (row.reviewed_by as string | null) ?? null,
     provider: row.provider as string,
     providerRef: (row.provider_ref as string | null) ?? null,
     idempotencyKey: (row.idempotency_key as string | null) ?? null,

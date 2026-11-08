@@ -5,6 +5,9 @@ import type {
   CreateTenantRequest,
   CreateTenantResult,
   ExchangeRateView,
+  FeeReportView,
+  PaymentView,
+  TenantPaymentMethodView,
   InviteInfoView,
   InviteLinkView,
   InviteStaffRequest,
@@ -120,6 +123,15 @@ export const api = {
   rotateQr: (tenantId: string, tableId: string) =>
     request<AdminTableView>("POST", `${t(tenantId)}/tables/${tableId}/rotate-qr`),
   payments: (tenantId: string) => request<AdminPaymentView[]>("GET", `${t(tenantId)}/payments`),
+  confirmPayment: (tenantId: string, paymentId: string) =>
+    request<PaymentView>("POST", `${t(tenantId)}/payments/${paymentId}/confirm`),
+  rejectPayment: (tenantId: string, paymentId: string, reason?: string) =>
+    request<PaymentView>("POST", `${t(tenantId)}/payments/${paymentId}/reject`, { reason }),
+  paymentMethods: (tenantId: string) => request<TenantPaymentMethodView[]>("GET", `${t(tenantId)}/payment-methods`),
+  updatePaymentMethods: (tenantId: string, methods: TenantPaymentMethodView[]) =>
+    request<TenantPaymentMethodView[]>("PUT", `${t(tenantId)}/payment-methods`, { methods }),
+  fees: (tenantId: string, month: string) => request<FeeReportView>("GET", `${t(tenantId)}/fees?month=${month}`),
+  refreshBcv: (tenantId: string) => request<ExchangeRateView>("POST", `${t(tenantId)}/exchange-rates/bcv`),
   rates: (tenantId: string) => request<ExchangeRateView[]>("GET", `${t(tenantId)}/exchange-rates`),
   setRate: (tenantId: string, body: SetExchangeRateRequest) =>
     request<ExchangeRateView>("POST", `${t(tenantId)}/exchange-rates`, body),
@@ -133,6 +145,7 @@ export const api = {
   removeStaff: (tenantId: string, userId: string) => request<void>("DELETE", `${t(tenantId)}/staff/${userId}`),
 
   platformTenants: () => request<PlatformTenantView[]>("GET", "/platform/tenants"),
+  platformFees: (month: string) => request<FeeReportView>("GET", `/platform/fees?month=${month}`),
   createTenant: (body: CreateTenantRequest) => request<CreateTenantResult>("POST", "/platform/tenants", body),
   updateTenant: (tenantId: string, body: UpdatePlatformTenantRequest) =>
     request<PlatformTenantView>("PATCH", `/platform/tenants/${tenantId}`, body),

@@ -13,7 +13,7 @@ import {
 import { SkipThrottle, Throttle } from "@nestjs/throttler";
 import type { PaymentView, ReceiptView } from "@tabtap/shared";
 import type { Request } from "express";
-import { CreatePaymentDto, MockConfirmDto } from "./dto/create-payment.dto";
+import { CreatePaymentDto, MockConfirmDto, SubmitProofDto } from "./dto/create-payment.dto";
 import { PaymentsService } from "./payments.service";
 import { ParseIdPipe } from "../common/ids";
 
@@ -44,6 +44,14 @@ export class PaymentsController {
   @Get("payments/:paymentId")
   get(@Param("paymentId", ParseIdPipe) paymentId: string): Promise<PaymentView> {
     return this.payments.getPayment(paymentId);
+  }
+
+  /** The guest reports a payment made outside TabTap (Pago Móvil reference, Zelle confirmation, …). */
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Post("payments/:paymentId/proof")
+  @HttpCode(200)
+  submitProof(@Param("paymentId", ParseIdPipe) paymentId: string, @Body() dto: SubmitProofDto): Promise<PaymentView> {
+    return this.payments.submitProof(paymentId, dto);
   }
 
   @Post("payments/:paymentId/cancel")

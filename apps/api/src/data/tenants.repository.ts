@@ -13,6 +13,7 @@ export interface TenantRecord {
   platformFeeBps: number;
   paymentCurrencies: string[];
   tipPercentOptions: number[];
+  rateSource: "manual" | "bcv";
   createdAt: Date;
 }
 
@@ -37,19 +38,19 @@ export class TenantsRepository {
 
   async updateSettings(
     tenantId: string,
-    changes: { name?: string; paymentCurrencies?: string[]; tipPercentOptions?: number[] },
+    changes: { name?: string; tipPercentOptions?: number[]; rateSource?: "manual" | "bcv" },
   ): Promise<TenantRecord> {
     const { rows } = await this.pool.query(
       `UPDATE tenants SET
          name = COALESCE($2, name),
-         payment_currencies = COALESCE($3::jsonb, payment_currencies),
+         rate_source = COALESCE($3, rate_source),
          tip_percent_options = COALESCE($4::jsonb, tip_percent_options),
          updated_at = now()
        WHERE id = $1 RETURNING *`,
       [
         tenantId,
         changes.name ?? null,
-        changes.paymentCurrencies ? JSON.stringify(changes.paymentCurrencies) : null,
+        changes.rateSource ?? null,
         changes.tipPercentOptions ? JSON.stringify(changes.tipPercentOptions) : null,
       ],
     );
@@ -70,6 +71,12 @@ export class TenantsRepository {
       [tenantId, changes.platformFeeBps ?? null, changes.status ?? null],
     );
     if (rowCount === 0) throw new NotFoundException("Restaurant not found");
+  }
+
+  /** Restaurants that take the official BCV rate automatically. */
+  async listBcvRateTenants(): Promise<string[]> {
+    const { rows } = await this.pool.query(`SELECT id FROM tenants WHERE rate_source = 'bcv' AND status = 'active'`);
+    return rows.map((r) => r.id as string);
   }
 
   async listForPlatform(): Promise<PlatformTenantView[]> {
@@ -149,6 +156,7 @@ function mapTenant(row: Record<string, unknown>): TenantRecord {
     platformFeeBps: Number(row.platform_fee_bps),
     paymentCurrencies: row.payment_currencies as string[],
     tipPercentOptions: row.tip_percent_options as number[],
+    rateSource: row.rate_source as "manual" | "bcv",
     createdAt: row.created_at as Date,
   };
 }

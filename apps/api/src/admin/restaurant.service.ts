@@ -32,16 +32,14 @@ export class RestaurantService {
   async updateSettings(
     tenantId: string,
     role: StaffRole,
-    changes: { name?: string; paymentCurrencies?: string[]; tipPercentOptions?: number[] },
+    changes: { name?: string; tipPercentOptions?: number[]; rateSource?: "manual" | "bcv" },
   ): Promise<TenantSettingsView> {
-    const tenant = await this.tenants.findById(tenantId);
-    const paymentCurrencies = changes.paymentCurrencies?.filter((c) => c !== tenant.defaultCurrency);
     const tipPercentOptions =
       changes.tipPercentOptions && [...new Set(changes.tipPercentOptions)].sort((a, b) => a - b);
     const updated = await this.tenants.updateSettings(tenantId, {
       name: changes.name?.trim(),
-      paymentCurrencies,
       tipPercentOptions,
+      rateSource: changes.rateSource,
     });
     return toSettingsView(updated, role);
   }
@@ -127,8 +125,8 @@ function toSettingsView(t: TenantRecord, role: StaffRole): TenantSettingsView {
     defaultCurrency: t.defaultCurrency,
     status: t.status,
     platformFeeBps: t.platformFeeBps,
-    paymentCurrencies: t.paymentCurrencies,
     tipPercentOptions: t.tipPercentOptions,
+    rateSource: t.rateSource,
     role,
   };
 }

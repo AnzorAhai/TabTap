@@ -2,7 +2,7 @@ import type { AdminTableView, PaymentMode, PaymentStatus, StaffRole, TenantSetti
 import QRCode from "qrcode";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { api } from "./api";
-import { ErrorText, formatMoney, formatTime, useAction, useLoad } from "./ui";
+import { ErrorText, formatMoney, formatTime, METHOD_LABEL, useAction, useLoad } from "./ui";
 
 const STATUS_LABEL: Record<PaymentStatus, string> = {
   pending: "В обработке",
@@ -145,15 +145,71 @@ export function TablesSection({ tenantId, role }: { tenantId: string; role: Staf
 export function PaymentsSection({ tenantId }: { tenantId: string }) {
   const load = useCallback(() => api.payments(tenantId), [tenantId]);
   const payments = useLoad(load);
+  const action = useAction();
+  const { reload } = payments;
+  // Offline payments wait for staff, so keep the list fresh while it's open.
+  useEffect(() => {
+    const timer = window.setInterval(reload, 10_000);
+    return () => window.clearInterval(timer);
+  }, [reload]);
+
+  const review = (paymentId: string, decision: "confirm" | "reject") =>
+    void action.run(async () => {
+      if (decision === "confirm") await api.confirmPayment(tenantId, paymentId);
+      else await api.rejectPayment(tenantId, paymentId, window.prompt("Причина (необязательно)") ?? undefined);
+      reload();
+    });
+
+  const awaiting = (payments.data ?? []).filter((p) => p.awaitingReview);
+
   return (
     <section>
       <h2>
         Платежи{" "}
-        <button type="button" className="link" onClick={payments.reload}>
+        <button type="button" className="link" onClick={reload}>
           обновить
         </button>
       </h2>
-      <ErrorText error={payments.error} />
+      <ErrorText error={payments.error ?? action.error} />
+      {awaiting.length > 0 && (
+        <div className="awaiting">
+          <h3>Ждут подтверждения ({awaiting.length})</h3>
+          {awaiting.map((p) => (
+            <div key={p.id} className="awaiting-row">
+              <div>
+                <strong>{formatMoney(p.chargeAmountMinor, p.chargeCurrency)}</strong> · {METHOD_LABEL[p.method]} ·{" "}
+                {p.tableLabel} · {formatTime(p.createdAt)}
+                {p.proof && (
+                  <div className="muted small">
+                    {Object.entries(p.proof)
+                      .map(([k, v]) => `${PROOF_LABEL[k] ?? k}: ${v}`)
+                      .join(" · ")}
+                  </div>
+                )}
+                {!p.proof && p.method.startsWith("cash") && (
+                  <div className="muted small">Наличные — примите у гостя</div>
+                )}
+                {!p.proof && !p.method.startsWith("cash") && (
+                  <div className="muted small">Гость ещё не сообщил номер операции</div>
+                )}
+              </div>
+              <div className="actions">
+                <button type="button" disabled={action.busy} onClick={() => review(p.id, "confirm")}>
+                  Деньги получены
+                </button>
+                <button
+                  type="button"
+                  className="link danger"
+                  disabled={action.busy}
+                  onClick={() => review(p.id, "reject")}
+                >
+                  Отклонить
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="table-scroll">
         <table className="payments-table">
           <thead>
@@ -161,6 +217,7 @@ export function PaymentsSection({ tenantId }: { tenantId: string }) {
               <th>Время</th>
               <th>Стол</th>
               <th>Что оплачено</th>
+              <th>Способ</th>
               <th>Сумма</th>
               <th>Чаевые</th>
               <th>Комиссия</th>
@@ -174,10 +231,16 @@ export function PaymentsSection({ tenantId }: { tenantId: string }) {
                 <td>{formatTime(p.createdAt)}</td>
                 <td>{p.tableLabel}</td>
                 <td>{MODE_LABEL[p.mode]}</td>
+                <td>{METHOD_LABEL[p.method]}</td>
                 <td>{formatMoney(p.amountMinor, p.currency)}</td>
                 <td>{p.tipMinor > 0 ? formatMoney(p.tipMinor, p.currency) : "—"}</td>
                 <td>{formatMoney(p.platformFeeMinor, p.currency)}</td>
-                <td>{formatMoney(p.chargeAmountMinor, p.chargeCurrency)}</td>
+                <td>
+                  {formatMoney(p.chargeAmountMinor, p.chargeCurrency)}
+                  {p.surchargeMinor > 0 && (
+                    <div className="muted small">вкл. надбавку {formatMoney(p.surchargeMinor, p.chargeCurrency)}</div>
+                  )}
+                </td>
                 <td>
                   <span className={`payment-status status-${p.status}`}>{STATUS_LABEL[p.status]}</span>
                 </td>
@@ -185,7 +248,7 @@ export function PaymentsSection({ tenantId }: { tenantId: string }) {
             ))}
             {payments.data?.length === 0 && (
               <tr>
-                <td colSpan={8}>Платежей пока нет.</td>
+                <td colSpan={9}>Платежей пока нет.</td>
               </tr>
             )}
           </tbody>
@@ -195,11 +258,18 @@ export function PaymentsSection({ tenantId }: { tenantId: string }) {
   );
 }
 
+const PROOF_LABEL: Record<string, string> = {
+  reference: "Операция",
+  payerPhone: "Телефон",
+  payerBank: "Банк",
+  payerName: "Отправитель",
+};
+
 export function RatesSection({ tenantId, settings }: { tenantId: string; settings: TenantSettingsView }) {
   const load = useCallback(() => api.rates(tenantId), [tenantId]);
   const rates = useLoad(load);
   const action = useAction();
-  const [quote, setQuote] = useState(settings.paymentCurrencies[0] ?? "VES");
+  const [quote, setQuote] = useState("VES");
   const [rate, setRate] = useState("");
 
   function submit(e: FormEvent) {
@@ -214,28 +284,47 @@ export function RatesSection({ tenantId, settings }: { tenantId: string; setting
   return (
     <section>
       <h2>Курс</h2>
-      <ErrorText error={rates.error} />
-      {rates.data?.length === 0 && <p>Курс не задан — гости могут платить только в {settings.defaultCurrency}.</p>}
+      <ErrorText error={rates.error ?? action.error} />
+      {rates.data?.length === 0 && <p>Курс не задан — оплата в боливарах недоступна.</p>}
       {(rates.data ?? []).map((r) => (
         <p key={`${r.baseCurrency}-${r.quoteCurrency}`}>
-          1 {r.baseCurrency} = <strong>{r.rate}</strong> {r.quoteCurrency} · с {formatTime(r.effectiveAt)} ({r.source})
+          1 {r.baseCurrency} = <strong>{r.rate}</strong> {r.quoteCurrency} · с {formatTime(r.effectiveAt)} (
+          {r.source === "bcv" ? "BCV" : r.source === "manual" ? "вручную" : r.source})
         </p>
       ))}
+      <p className="muted">
+        {settings.rateSource === "bcv"
+          ? "Официальный курс BCV подтягивается автоматически каждый час. Курс, введённый вручную, действует до следующего изменения курса BCV."
+          : "Курс вводится вручную. Автоматический курс BCV можно включить в настройках."}
+      </p>
       {canManage(settings.role) && (
-        <form className="form inline" onSubmit={submit}>
-          <span>1 {settings.defaultCurrency} =</span>
-          <input
-            inputMode="decimal"
-            placeholder="например 236.5"
-            required
-            pattern="\d{1,12}(\.\d{1,8})?"
-            value={rate}
-            onChange={(e) => setRate(e.target.value.replace(",", "."))}
-          />
-          <input value={quote} maxLength={3} required onChange={(e) => setQuote(e.target.value.toUpperCase())} />
-          <button disabled={action.busy}>Задать курс</button>
-          <ErrorText error={action.error} />
-        </form>
+        <>
+          <button
+            type="button"
+            disabled={action.busy}
+            onClick={() =>
+              void action.run(async () => {
+                await api.refreshBcv(tenantId);
+                rates.reload();
+              })
+            }
+          >
+            Взять курс BCV сейчас
+          </button>
+          <form className="form inline" onSubmit={submit}>
+            <span>1 {settings.defaultCurrency} =</span>
+            <input
+              inputMode="decimal"
+              placeholder="например 896.12"
+              required
+              pattern="\d{1,12}(\.\d{1,8})?"
+              value={rate}
+              onChange={(e) => setRate(e.target.value.replace(",", "."))}
+            />
+            <input value={quote} maxLength={3} required onChange={(e) => setQuote(e.target.value.toUpperCase())} />
+            <button disabled={action.busy}>Задать вручную</button>
+          </form>
+        </>
       )}
     </section>
   );
@@ -250,7 +339,7 @@ export function SettingsSection({
 }) {
   const action = useAction();
   const [name, setName] = useState(settings.name);
-  const [currencies, setCurrencies] = useState(settings.paymentCurrencies.join(", "));
+  const [rateSource, setRateSource] = useState(settings.rateSource);
   const [tips, setTips] = useState(settings.tipPercentOptions.join(", "));
   const editable = canManage(settings.role);
 
@@ -259,10 +348,7 @@ export function SettingsSection({
     void action.run(async () => {
       const saved = await api.updateSettings(settings.id, {
         name: settings.role === "owner" ? name : undefined,
-        paymentCurrencies: currencies
-          .split(/[\s,]+/)
-          .map((c) => c.trim().toUpperCase())
-          .filter(Boolean),
+        rateSource,
         tipPercentOptions: tips
           .split(/[\s,]+/)
           .filter(Boolean)
@@ -285,8 +371,15 @@ export function SettingsSection({
           <input value={settings.defaultCurrency} disabled />
         </label>
         <label>
-          Дополнительные валюты оплаты (через запятую, напр. VES)
-          <input value={currencies} disabled={!editable} onChange={(e) => setCurrencies(e.target.value)} />
+          Курс USD → VES
+          <select
+            value={rateSource}
+            disabled={!editable}
+            onChange={(e) => setRateSource(e.target.value as "manual" | "bcv")}
+          >
+            <option value="bcv">Официальный курс BCV, автоматически</option>
+            <option value="manual">Вводить вручную</option>
+          </select>
         </label>
         <label>
           Варианты чаевых, % (через запятую)

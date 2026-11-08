@@ -36,3 +36,32 @@ export type PaymentStatus = (typeof PaymentStatus)[keyof typeof PaymentStatus];
 
 /** How a bill line or an equal-split share looks to guests right now. */
 export type ClaimState = "available" | "reserved" | "paid";
+
+/** Ways a guest can pay (Venezuela first). */
+export const PaymentMethod = {
+  CARD: "card",
+  PAGO_MOVIL: "pago_movil",
+  ZELLE: "zelle",
+  BINANCE_PAY: "binance_pay",
+  CASH_USD: "cash_usd",
+  CASH_VES: "cash_ves",
+} as const;
+export type PaymentMethod = (typeof PaymentMethod)[keyof typeof PaymentMethod];
+
+/**
+ * How a payment gets confirmed:
+ *   gateway — the payment provider confirms it (card)
+ *   proof   — the guest pays outside TabTap and reports a reference; staff (or the demo simulator) verify it
+ *   staff   — a staff member confirms receiving it (cash)
+ */
+export type PaymentFlow = "gateway" | "proof" | "staff";
+
+/** Fixed properties of each method; restaurants configure which ones they accept. */
+export const PAYMENT_METHODS: Record<PaymentMethod, { currency: "bill" | "USD" | "VES"; flow: PaymentFlow }> = {
+  card: { currency: "bill", flow: "gateway" },
+  pago_movil: { currency: "VES", flow: "proof" },
+  zelle: { currency: "USD", flow: "proof" },
+  binance_pay: { currency: "USD", flow: "proof" },
+  cash_usd: { currency: "USD", flow: "staff" },
+  cash_ves: { currency: "VES", flow: "staff" },
+};

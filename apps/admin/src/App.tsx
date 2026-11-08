@@ -2,6 +2,7 @@ import type { MeView, SessionView, TenantSettingsView } from "@tabtap/shared";
 import { useCallback, useEffect, useState } from "react";
 import { api, hasSession, onSessionExpired, setSession } from "./api";
 import { InvitePage, LoginPage } from "./AuthPages";
+import { FeesSection, PaymentMethodsSection } from "./PaymentSettings";
 import { PaymentsSection, RatesSection, SettingsSection, TablesSection } from "./RestaurantSections";
 import { PlatformSection, StaffSection } from "./TeamSections";
 import { ErrorText, messageOf, ROLE_LABEL } from "./ui";
@@ -9,7 +10,7 @@ import { ErrorText, messageOf, ROLE_LABEL } from "./ui";
 // Functional admin panel for Phase 2; visual design and translations come in Phase 4.
 
 const TENANT_KEY = "tabtap.admin.tenant";
-type Tab = "tables" | "payments" | "rates" | "settings" | "staff" | "platform";
+type Tab = "tables" | "payments" | "methods" | "rates" | "fees" | "settings" | "staff" | "platform";
 
 function storedTenant(): string | null {
   try {
@@ -101,10 +102,11 @@ function Dashboard({ me, onSignOut }: { me: MeView; onSignOut: () => void }) {
   const tabs: [Tab, string][] = [
     ["tables", "Столы"],
     ["payments", "Платежи"],
+    ["methods", "Способы оплаты"],
     ["rates", "Курс"],
     ["settings", "Настройки"],
   ];
-  if (role === "owner" || role === "manager") tabs.push(["staff", "Сотрудники"]);
+  if (role === "owner" || role === "manager") tabs.push(["fees", "Комиссия"], ["staff", "Сотрудники"]);
   if (me.isPlatformAdmin) tabs.push(["platform", "Платформа"]);
 
   return (
@@ -144,7 +146,9 @@ function Dashboard({ me, onSignOut }: { me: MeView; onSignOut: () => void }) {
         <>
           {tab === "tables" && <TablesSection tenantId={tenantId} role={role} />}
           {tab === "payments" && <PaymentsSection tenantId={tenantId} />}
+          {tab === "methods" && <PaymentMethodsSection tenantId={tenantId} role={role} />}
           {tab === "rates" && <RatesSection tenantId={tenantId} settings={settings} />}
+          {tab === "fees" && <FeesSection tenantId={tenantId} />}
           {tab === "settings" && <SettingsSection key={settings.id} settings={settings} onSaved={setSettings} />}
           {tab === "staff" && <StaffSection tenantId={tenantId} role={role} myUserId={me.userId} />}
         </>

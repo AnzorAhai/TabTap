@@ -1,7 +1,7 @@
 // Typed rows as the API works with them internally. Repositories map database rows
 // (snake_case, BIGINT as string, NUMERIC as string) into these.
 
-import type { BillItem, BillStatus, PaymentMode, PaymentStatus } from "@tabtap/shared";
+import type { BillItem, BillStatus, PaymentMethod, PaymentMode, PaymentStatus } from "@tabtap/shared";
 
 /** A table plus the restaurant settings needed to serve a guest at it. */
 export interface TableContext {
@@ -54,8 +54,18 @@ export interface PaymentRecord {
   platformFeeMinor: number;
   currency: string;
   chargeCurrency: string;
+  /** Includes the surcharge. */
   chargeAmountMinor: number;
   exchangeRate: string | null;
+  method: PaymentMethod;
+  surchargeBps: number;
+  /** Charge currency. */
+  surchargeMinor: number;
+  /** Reported by the guest for proof-based methods. */
+  proof: Record<string, string> | null;
+  proofSubmittedAt: Date | null;
+  reviewedBy: string | null;
+  /** "offline" for methods confirmed by staff or proof, else the gateway's type. */
   provider: string;
   providerRef: string | null;
   idempotencyKey: string | null;

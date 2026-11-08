@@ -23,6 +23,15 @@ export interface AppConfig {
   rateLimitPerMinute: number;
   /** How long a started payment holds its items/shares before they are released. */
   paymentHoldMinutes: number;
+  /**
+   * Hold for payments confirmed outside a gateway (Pago Móvil, Zelle, cash, …): the guest
+   * pays in another app or waits for the waiter, so they get longer.
+   */
+  offlineHoldMinutes: number;
+  /** Demo: seconds after a reported reference until the simulated bank check decides. */
+  simulatedCheckSeconds: number;
+  /** JSON source of the official BCV USD→VES rate (DolarAPI format). */
+  bcvRateUrl: string;
   /** Expiry sweeper and POS sync worker; off in tests, which drive them directly. */
   backgroundJobs: boolean;
   posConnectorType: PosConnectorType;
@@ -164,6 +173,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     rateLimitEnabled: oneOf(problems, "RATE_LIMIT_ENABLED", env.RATE_LIMIT_ENABLED, BOOLEANS, "true") === "true",
     rateLimitPerMinute: positiveInt(problems, "RATE_LIMIT_PER_MINUTE", env.RATE_LIMIT_PER_MINUTE, 300),
     paymentHoldMinutes: positiveInt(problems, "PAYMENT_HOLD_MINUTES", env.PAYMENT_HOLD_MINUTES, 10),
+    offlineHoldMinutes: positiveInt(problems, "PAYMENT_HOLD_MINUTES_OFFLINE", env.PAYMENT_HOLD_MINUTES_OFFLINE, 30),
+    simulatedCheckSeconds: positiveInt(problems, "SIMULATED_CHECK_SECONDS", env.SIMULATED_CHECK_SECONDS, 5),
+    bcvRateUrl: baseUrl(problems, "BCV_RATE_URL", env.BCV_RATE_URL, "https://ve.dolarapi.com/v1/dolares/oficial"),
     backgroundJobs: oneOf(problems, "BACKGROUND_JOBS", env.BACKGROUND_JOBS, BOOLEANS, "true") === "true",
     posConnectorType: oneOf(problems, "POS_CONNECTOR_TYPE", env.POS_CONNECTOR_TYPE, POS_CONNECTOR_TYPES, "mock"),
     paymentProviderType,
