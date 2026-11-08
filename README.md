@@ -75,6 +75,18 @@ stay. Other restaurants get 404 from these endpoints. The script for showing it:
 
 The default `mock` connector keeps three fixed bills in memory and is what the tests use.
 
+## Isolation between restaurants
+
+Requests under `/tenants/:tenantId` run on one connection switched to the restricted `tabtap_app` role with
+`app.current_tenant_id` set, so row-level security limits every query to that restaurant, even one that forgets
+its filter. Guest endpoints, background jobs and `/platform` work across restaurants and keep the owner
+connection. A new table with a `tenant_id` column needs a `tenant_isolation` policy; a test fails without one.
+
+This switches session state, so `DATABASE_URL` must not be a transaction pooler (Supabase's port 6543); the API
+refuses to start with one.
+
+What is left before real restaurants: [docs/LAUNCH.md](docs/LAUNCH.md).
+
 ## Refunds
 
 Owners and managers can refund a completed payment from the Payments page. Card payments go back

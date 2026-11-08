@@ -1,6 +1,7 @@
 import { Global, Inject, Injectable, Logger, Module, OnApplicationShutdown } from "@nestjs/common";
 import { Pool } from "pg";
 import { APP_CONFIG, AppConfig } from "../config/app-config";
+import { tenantAwarePool } from "./tenant-scope";
 
 export const DB_POOL = Symbol("DB_POOL");
 
@@ -19,7 +20,7 @@ const poolProvider = {
     // Without a listener, an error on an idle client (e.g. the server closing
     // the connection) is emitted as an unhandled 'error' event and crashes the process.
     pool.on("error", (err) => logger.error(`Idle database client error: ${err.message}`, err.stack));
-    return pool;
+    return tenantAwarePool(pool);
   },
 };
 

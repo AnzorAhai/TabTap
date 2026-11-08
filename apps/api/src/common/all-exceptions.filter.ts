@@ -1,6 +1,7 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from "@nestjs/common";
 import type { Request, Response } from "express";
 import { DatabaseError } from "pg";
+import { reportError } from "./error-reporting";
 
 export interface ErrorBody {
   statusCode: number;
@@ -70,6 +71,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (status >= 500) {
       const detail = exception instanceof Error ? (exception.stack ?? exception.message) : String(exception);
       this.logger.error(`${request.method} ${request.originalUrl} -> ${status}`, detail);
+      const route = (request.route as { path?: string } | undefined)?.path ?? "unknown route";
+      reportError(exception, `${request.method} ${route}`);
     }
 
     response.status(status).json(body);

@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from "@nestjs/common";
+import { reportError } from "../common/error-reporting";
 import { APP_CONFIG, AppConfig } from "../config/app-config";
 import { SessionsRepository } from "../data/sessions.repository";
 import { BcvRateService } from "../rates/bcv-rate.service";
@@ -57,6 +58,7 @@ export class BackgroundJobsService implements OnApplicationBootstrap, OnApplicat
       }
     } catch (err) {
       this.logger.error("Background job tick failed", err instanceof Error ? err.stack : err);
+      reportError(err, "background jobs");
     } finally {
       this.running = false;
     }

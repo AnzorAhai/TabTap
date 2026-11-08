@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { Pool } from "pg";
+import { reportError } from "../common/error-reporting";
 import { PosSyncRepository } from "../data/pos-sync.repository";
 import { DB_POOL } from "../database/database.module";
 import { withTransaction } from "../database/transaction";
@@ -48,8 +49,11 @@ export class PosSyncService {
           const giveUp = attempt >= MAX_ATTEMPTS;
           await this.jobs.markRetry(db, job.id, message, retryDelaySeconds(attempt), giveUp);
           const log = `POS update for payment ${job.paymentId} failed (attempt ${attempt}): ${message}`;
-          if (giveUp) this.logger.error(`${log} — giving up`);
-          else this.logger.warn(log);
+          if (giveUp) {
+            this.logger.error(`${log} — giving up`);
+            reportError(err, "POS sync gave up");
+          }
+          if (!giveUp) this.logger.warn(log);
         }
       }
       return delivered;

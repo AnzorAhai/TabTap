@@ -6,6 +6,7 @@ import { NestFactory } from "@nestjs/core";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 import { AppModule } from "./app.module";
 import { configureApp } from "./app.setup";
+import { initErrorReporting } from "./common/error-reporting";
 import { APP_CONFIG, AppConfig, ConfigError } from "./config/app-config";
 
 // Local development reads apps/api/.env; on a server the platform provides real
@@ -26,6 +27,7 @@ async function bootstrap(): Promise<void> {
     logger: new ConsoleLogger({ json: isProduction, colors: !isProduction }),
   });
   const config = app.get<AppConfig>(APP_CONFIG);
+  initErrorReporting(config.sentryDsn, config.nodeEnv);
   configureApp(app, config);
   await app.listen(config.port, "0.0.0.0");
   Logger.log(`TabTap API listening on port ${config.port} (${config.nodeEnv})`, "Bootstrap");

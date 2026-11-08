@@ -34,6 +34,8 @@ export interface AppConfig {
   bcvRateUrl: string;
   /** Expiry sweeper and POS sync worker; off in tests, which drive them directly. */
   backgroundJobs: boolean;
+  /** Where unexpected errors are reported; without it they only go to the logs. */
+  sentryDsn?: string;
   posConnectorType: PosConnectorType;
   paymentProviderType: PaymentProviderType;
   mockPaymentFlow: MockPaymentFlow;
@@ -131,6 +133,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const databaseUrl = env.DATABASE_URL?.trim() ?? "";
   if (!databaseUrl) {
     problems.push("DATABASE_URL is required");
+  } else if (/:6543(\/|$|\?)/.test(databaseUrl)) {
+    // Per-restaurant restrictions are session state, which such a pooler would leak between clients.
+    problems.push("DATABASE_URL must not use a transaction pooler (port 6543); use the session pooler (5432)");
   }
 
   let corsOrigins: string[];
@@ -177,6 +182,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     simulatedCheckSeconds: positiveInt(problems, "SIMULATED_CHECK_SECONDS", env.SIMULATED_CHECK_SECONDS, 5),
     bcvRateUrl: baseUrl(problems, "BCV_RATE_URL", env.BCV_RATE_URL, "https://ve.dolarapi.com/v1/dolares/oficial"),
     backgroundJobs: oneOf(problems, "BACKGROUND_JOBS", env.BACKGROUND_JOBS, BOOLEANS, "true") === "true",
+    sentryDsn: env.SENTRY_DSN?.trim() || undefined,
     posConnectorType: oneOf(problems, "POS_CONNECTOR_TYPE", env.POS_CONNECTOR_TYPE, POS_CONNECTOR_TYPES, "mock"),
     paymentProviderType,
     mockPaymentFlow: oneOf(problems, "MOCK_PAYMENT_FLOW", env.MOCK_PAYMENT_FLOW, MOCK_PAYMENT_FLOWS, "instant"),

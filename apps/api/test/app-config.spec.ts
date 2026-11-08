@@ -11,6 +11,14 @@ function problemsOf(env: NodeJS.ProcessEnv): string[] {
   throw new Error("expected loadConfig to throw");
 }
 
+describe("database connection", () => {
+  it("refuses a transaction pooler, which would leak per-restaurant settings", () => {
+    const load = (url: string) => () => loadConfig({ DATABASE_URL: url });
+    expect(load("postgresql://u:p@aws-1.pooler.supabase.com:6543/postgres")).toThrow(/transaction pooler/);
+    expect(load("postgresql://u:p@aws-1.pooler.supabase.com:5432/postgres")).not.toThrow();
+  });
+});
+
 describe("loadConfig", () => {
   it("applies development defaults when only DATABASE_URL is set", () => {
     const config = loadConfig({ DATABASE_URL: "postgresql://localhost/tabtap" });
