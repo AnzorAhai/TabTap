@@ -27,7 +27,13 @@ const poolProvider = {
 class DatabaseShutdown implements OnApplicationShutdown {
   constructor(@Inject(DB_POOL) private readonly pool: Pool) {}
 
+  // Runs after the HTTP server has stopped. Give queries that are still running a
+  // few seconds to finish rather than cutting them off.
   async onApplicationShutdown(): Promise<void> {
+    const deadline = Date.now() + 10_000;
+    while (this.pool.totalCount > this.pool.idleCount && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
     await this.pool.end();
   }
 }

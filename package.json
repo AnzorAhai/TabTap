@@ -22,7 +22,8 @@
     "test": "npm run test --workspaces --if-present",
     "db:local": "node db/local-postgres.mjs",
     "db:migrate": "node --env-file-if-exists=apps/api/.env db/migrate.mjs",
-    "db:reset-demo": "node --env-file-if-exists=apps/api/.env db/reset-test-data.mjs"
+    "db:reset-demo": "node --env-file-if-exists=apps/api/.env db/reset-test-data.mjs",
+    "users:invite": "node --env-file-if-exists=apps/api/.env db/invite-user.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

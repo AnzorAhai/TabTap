@@ -2,6 +2,7 @@ import { MiddlewareConsumer, Module, NestModule } from "@nestjs/common";
 import { APP_FILTER, APP_GUARD } from "@nestjs/core";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { AdminModule } from "./admin/admin.module";
+import { AuthModule } from "./auth/auth.module";
 import { BillsModule } from "./bills/bills.module";
 import { AllExceptionsFilter } from "./common/all-exceptions.filter";
 import { RequestLoggerMiddleware } from "./common/request-logger.middleware";
@@ -24,6 +25,7 @@ import { PaymentsModule } from "./payments/payments.module";
         skipIf: () => !config.rateLimitEnabled,
       }),
     }),
+    AuthModule,
     BillsModule,
     PaymentsModule,
     AdminModule,

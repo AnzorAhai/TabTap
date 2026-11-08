@@ -1,10 +1,13 @@
 import { Module } from "@nestjs/common";
-import { AdminController } from "./admin.controller";
-import { AdminTokenGuard } from "./admin-token.guard";
-import { AdminService } from "./admin.service";
+import { PlatformController } from "./platform.controller";
+import { PlatformService } from "./platform.service";
+import { RestaurantController } from "./restaurant.controller";
+import { RestaurantService } from "./restaurant.service";
+import { StaffService } from "./staff.service";
 
+/** The admin panel's API: a restaurant's own management, and the platform section. */
 @Module({
-  controllers: [AdminController],
-  providers: [AdminService, AdminTokenGuard],
+  controllers: [RestaurantController, PlatformController],
+  providers: [RestaurantService, StaffService, PlatformService],
 })
 export class AdminModule {}

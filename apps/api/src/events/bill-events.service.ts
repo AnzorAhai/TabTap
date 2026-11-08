@@ -1,6 +1,6 @@
-import { Injectable, type MessageEvent } from "@nestjs/common";
+import { Injectable, type MessageEvent, type OnModuleDestroy } from "@nestjs/common";
 import type { BillEvent } from "@tabtap/shared";
-import { filter, interval, map, merge, Observable, Subject } from "rxjs";
+import { filter, interval, map, merge, Observable, Subject, takeUntil } from "rxjs";
 
 const HEARTBEAT_MS = 25_000;
 
@@ -10,8 +10,18 @@ const HEARTBEAT_MS = 25_000;
  * with several API instances this needs a shared channel (e.g. Postgres LISTEN/NOTIFY).
  */
 @Injectable()
-export class BillEventsService {
+export class BillEventsService implements OnModuleDestroy {
   private readonly changes = new Subject<string>();
+  private readonly closing = new Subject<void>();
+
+  /**
+   * End every open stream when the app shuts down: an open SSE response would otherwise
+   * keep the HTTP server from closing. Browsers reconnect to the new instance by themselves.
+   */
+  onModuleDestroy(): void {
+    this.closing.next();
+    this.closing.complete();
+  }
 
   emit(billId: string): void {
     this.changes.next(billId);
@@ -26,7 +36,10 @@ export class BillEventsService {
     const pings = interval(HEARTBEAT_MS).pipe(
       map((): BillEvent => ({ kind: "ping", billId, at: new Date().toISOString() })),
     );
-    return merge(updates, pings).pipe(map((data) => ({ data })));
+    return merge(updates, pings).pipe(
+      map((data) => ({ data })),
+      takeUntil(this.closing),
+    );
   }
 
   /** Raw change notifications (bill ids); used by tests. */

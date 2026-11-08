@@ -28,6 +28,8 @@ async function main() {
         applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
     `);
+    // Keep the bookkeeping table out of Supabase's public REST API (owner still has access).
+    await client.query("ALTER TABLE schema_migrations ENABLE ROW LEVEL SECURITY");
     const applied = new Set((await client.query("SELECT filename FROM schema_migrations")).rows.map((r) => r.filename));
 
     const files = readdirSync(migrationsDir)

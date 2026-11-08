@@ -2,7 +2,7 @@ import { basisPointsOf, convertMinor, percentOf, type PaymentView, type TableBil
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { BillEventsService } from "../src/events/bill-events.service";
-import { ADMIN_TOKEN, createTestApp, type TestApp } from "./support/test-app";
+import { createTestApp, DEMO_TENANT_ID, type TestApp } from "./support/test-app";
 
 // End-to-end over HTTP against a real PostgreSQL (one fresh database per test).
 // Demo table "table-1" (mock POS): 4 lines, subtotal $34.00, IVA $5.44, service $3.40,
@@ -54,6 +54,12 @@ describe("bill view", () => {
 
   it("returns 404 for an unknown table", async () => {
     await t.http().get("/tables/nope/bill").expect(404);
+  });
+
+  it("gives tables random, unguessable QR tokens", async () => {
+    const token = await t.qrToken("table-1");
+    expect(token).toMatch(/^[A-Za-z0-9_-]{22}$/);
+    await t.http().get("/tables/table-1/bill").expect(404);
   });
 });
 
@@ -150,10 +156,11 @@ describe("paying (instant mock gateway)", () => {
   });
 
   it("converts to bolívares at the restaurant's rate; the fee stays on the USD amount", async () => {
+    const owner = await t.signIn({ email: "owner@demo.test", role: "owner" });
     await t
       .http()
-      .post("/admin/exchange-rates")
-      .set("Authorization", `Bearer ${ADMIN_TOKEN}`)
+      .post(`/tenants/${DEMO_TENANT_ID}/exchange-rates`)
+      .set("Authorization", `Bearer ${owner.token}`)
       .send({ baseCurrency: "USD", quoteCurrency: "VES", rate: "240.125" })
       .expect(201);
 
@@ -327,33 +334,29 @@ describe("pending payments (manual mock gateway, like Pago Móvil)", () => {
   });
 });
 
-describe("admin exchange rates", () => {
+describe("exchange rates in the admin panel", () => {
   let t: TestApp;
+  beforeEach(async () => (t = await createTestApp()));
   afterEach(() => t.close());
 
-  it("requires the admin token to change a rate", async () => {
-    t = await createTestApp();
+  it("lets owners and managers set the rate, not waiters or anonymous callers", async () => {
+    const url = `/tenants/${DEMO_TENANT_ID}/exchange-rates`;
     const body = { baseCurrency: "USD", quoteCurrency: "VES", rate: "250" };
-    await t.http().post("/admin/exchange-rates").send(body).expect(401);
-    await t.http().post("/admin/exchange-rates").set("Authorization", "Bearer wrong").send(body).expect(401);
+    const waiter = await t.signIn({ email: "waiter@demo.test", role: "waiter" });
+    const manager = await t.signIn({ email: "manager@demo.test", role: "manager" });
+
+    await t.http().post(url).send(body).expect(401);
+    await t.http().post(url).set("Authorization", `Bearer ${waiter.token}`).send(body).expect(403);
     await t
       .http()
-      .post("/admin/exchange-rates")
-      .set("Authorization", `Bearer ${ADMIN_TOKEN}`)
+      .post(url)
+      .set("Authorization", `Bearer ${manager.token}`)
       .send({ ...body, rate: "0" })
       .expect(400);
-    await t.http().post("/admin/exchange-rates").set("Authorization", `Bearer ${ADMIN_TOKEN}`).send(body).expect(201);
-    const rates = await t.http().get("/admin/exchange-rates").expect(200);
-    expect(rates.body).toEqual([expect.objectContaining({ baseCurrency: "USD", quoteCurrency: "VES", rate: "250" })]);
-  });
+    await t.http().post(url).set("Authorization", `Bearer ${manager.token}`).send(body).expect(201);
 
-  it("is disabled when no admin token is configured", async () => {
-    t = await createTestApp({ ADMIN_API_TOKEN: "" });
-    await t
-      .http()
-      .post("/admin/exchange-rates")
-      .set("Authorization", `Bearer ${ADMIN_TOKEN}`)
-      .send({ baseCurrency: "USD", quoteCurrency: "VES", rate: "250" })
-      .expect(403);
+    const rates = await t.http().get(url).set("Authorization", `Bearer ${waiter.token}`).expect(200);
+    expect(rates.body).toEqual([expect.objectContaining({ baseCurrency: "USD", quoteCurrency: "VES", rate: "250" })]);
+    expect((await t.tableView()).paymentCurrencies[1].rate).toBe("250");
   });
 });
