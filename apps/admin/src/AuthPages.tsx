@@ -22,26 +22,26 @@ function AuthLayout({ title, children }: { title: string; children: ReactNode })
 
 export function LoginPage({ onSignedIn }: { onSignedIn: (session: SessionView) => void }) {
   const { t } = useI18n();
-  const [email, setEmail] = useState("");
+  const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const { busy, error, run } = useAction();
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    void run(async () => onSignedIn(await api.login(email, password)));
+    void run(async () => onSignedIn(await api.login(login, password)));
   }
 
   return (
     <AuthLayout title={t.loginTitle}>
       <form className="form" onSubmit={submit}>
         <label className="field">
-          {t.email}
+          {t.login}
           <input
-            type="email"
+            autoCapitalize="none"
             autoComplete="username"
             required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            value={login}
+            onChange={(e) => setLogin(e.target.value)}
           />
         </label>
         <label className="field">
@@ -107,7 +107,7 @@ export function InvitePage({ token, onSignedIn }: { token: string; onSignedIn: (
   return (
     <AuthLayout title={info.purpose === "invite" ? t.welcome : t.newPassword}>
       <p>
-        {t.account}: <strong>{info.email}</strong>
+        {t.account}: <strong>{info.login}</strong>
       </p>
       <form className="form" onSubmit={submit}>
         {info.purpose === "invite" && (

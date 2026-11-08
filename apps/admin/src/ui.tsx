@@ -124,7 +124,7 @@ export function InviteLinkBox({ link }: { link: InviteLinkView }) {
   return (
     <div className="invite-link">
       <div>
-        <strong>{t.linkFor(link.email)}</strong> {t.linkValid(dateTime(link.expiresAt))}
+        <strong>{t.linkFor(link.login)}</strong> {t.linkValid(dateTime(link.expiresAt))}
       </div>
       <div className="invite-row">
         <input readOnly value={link.url} onFocus={(e) => e.target.select()} />

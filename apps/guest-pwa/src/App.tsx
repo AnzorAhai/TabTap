@@ -46,6 +46,12 @@ function Loading() {
 function LoadProblem({ error, onRetry }: { error: unknown; onRetry: () => Promise<void> }) {
   const { t } = useI18n();
   const status = error instanceof ApiError ? error.status : -1;
+  // The waiter may be about to open the bill: it appears without the guest doing anything.
+  useEffect(() => {
+    if (status !== 404) return;
+    const timer = window.setInterval(() => void onRetry(), 4000);
+    return () => window.clearInterval(timer);
+  }, [status, onRetry]);
   const retry = (
     <button type="button" className="primary" onClick={() => void onRetry()}>
       {t.retry}

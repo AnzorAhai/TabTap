@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query } from "@nestjs/common";
-import { PaymentMethod, PaymentStatus } from "@tabtap/shared";
+import { LOGIN_PATTERN, PaymentMethod, PaymentStatus } from "@tabtap/shared";
 import type {
   DailySummaryView,
   FeeReportView,
@@ -31,7 +31,6 @@ import {
   ArrayMinSize,
   IsArray,
   IsBoolean,
-  IsEmail,
   IsIn,
   IsInt,
   IsObject,
@@ -168,9 +167,8 @@ export class SetExchangeRateDto implements SetExchangeRateRequest {
 }
 
 export class InviteStaffDto implements InviteStaffRequest {
-  @IsEmail()
-  @MaxLength(254)
-  email!: string;
+  @Matches(LOGIN_PATTERN, { message: "login must be 3-254 letters, digits or . _ - @" })
+  login!: string;
 
   @IsIn(ROLES)
   role!: StaffRole;

@@ -20,8 +20,8 @@ describe("restaurant operations", () => {
   beforeEach(async () => {
     t = await createTestApp();
     billId = (await t.tableView()).bill.id;
-    owner = await t.signIn({ email: "owner@demo.test", role: "owner" });
-    waiter = await t.signIn({ email: "waiter@demo.test", role: "waiter" });
+    owner = await t.signIn({ login: "owner@demo.test", role: "owner" });
+    waiter = await t.signIn({ login: "waiter@demo.test", role: "waiter" });
   });
   afterEach(() => t.close());
 
@@ -106,8 +106,8 @@ describe("restaurant operations", () => {
 
     it("has no bill for a table nobody has opened", async () => {
       const live = (await get("/tables/live").expect(200)).body as LiveTableView[];
-      expect(live).toHaveLength(3);
-      expect(live.filter((x) => x.bill === null)).toHaveLength(2);
+      expect(live).toHaveLength(6);
+      expect(live.filter((x) => x.bill === null)).toHaveLength(5);
     });
   });
 
@@ -189,7 +189,7 @@ describe("restaurant operations", () => {
       const { rows } = await t.db.query(
         `INSERT INTO tenants (name, country, default_currency) VALUES ('Other', 'VE', 'USD') RETURNING id`,
       );
-      const other = await t.signIn({ email: "owner@other.test", role: "owner", tenantId: rows[0].id });
+      const other = await t.signIn({ login: "owner@other.test", role: "owner", tenantId: rows[0].id });
       await t.http().post(`/tenants/${rows[0].id}/payments/${card.id}/refund`).set(bearer(other)).send({}).expect(404);
       expect((await t.tableView()).bill.paidMinor).toBe(1008);
     });

@@ -1,32 +1,13 @@
 import { Logger } from "@nestjs/common";
-import { percentOf, type BillItem } from "@tabtap/shared";
-import type { MarkPaidInput, POSConnector, PosBill } from "./pos-connector.interface";
+import type { MarkPaidInput, POSConnector, PosBill, PosTableRef } from "./pos-connector.interface";
+import { venezuelanBill } from "./venezuelan-bill";
 
-const IVA_PERCENT = 16; // Venezuela's general VAT rate
-const SERVICE_PERCENT = 10; // customary restaurant service charge
-
-/** A Venezuelan-style bill: prices in USD, IVA per line, 10% service on the subtotal. */
 function demoBill(externalId: string, lines: [id: string, name: string, quantity: number, unitPriceCents: number][]) {
-  const items: BillItem[] = lines.map(([id, name, quantity, unitPriceMinor]) => ({
-    id,
-    name,
-    quantity,
-    unitPriceMinor,
-    taxMinor: percentOf(unitPriceMinor * quantity, IVA_PERCENT),
-    discountMinor: 0,
-  }));
-  const subtotal = items.reduce((s, i) => s + i.unitPriceMinor * i.quantity, 0);
-  const tax = items.reduce((s, i) => s + i.taxMinor, 0);
-  const serviceChargeMinor = percentOf(subtotal, SERVICE_PERCENT);
-  const bill: PosBill = {
+  return venezuelanBill(
     externalId,
-    currency: "USD",
-    items,
-    serviceChargeMinor,
-    totalMinor: subtotal + tax + serviceChargeMinor,
-    status: "open",
-  };
-  return bill;
+    "USD",
+    lines.map(([id, name, quantity, unitPriceMinor]) => ({ id, name, quantity, unitPriceMinor })),
+  );
 }
 
 /**
@@ -73,8 +54,8 @@ export class MockPOSConnector implements POSConnector {
   /** Payments the POS has been told about, by payment id (marking the same payment twice is a no-op). */
   readonly markedPayments = new Map<string, MarkPaidInput & { externalBillId: string }>();
 
-  async getOpenBill(posTableRef: string): Promise<PosBill | null> {
-    const bill = this.bills.get(posTableRef);
+  async getOpenBill(table: PosTableRef): Promise<PosBill | null> {
+    const bill = this.bills.get(table.posTableRef);
     return bill && bill.status === "open" ? structuredClone(bill) : null;
   }
 

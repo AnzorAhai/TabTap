@@ -12,7 +12,7 @@ const CARD_TEXT: Record<Language, { cta: string; sub: string }> = {
   ru: { cta: "Отсканируйте и оплатите счёт", sub: "Без ожидания. Можно разделить на всех." },
 };
 
-function QrImage({ value, alt, pixels, shown }: { value: string; alt: string; pixels: number; shown?: number }) {
+export function QrImage({ value, alt, pixels, shown }: { value: string; alt: string; pixels: number; shown?: number }) {
   const [src, setSrc] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;

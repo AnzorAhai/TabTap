@@ -5,6 +5,7 @@ import type {
   CreateTenantRequest,
   CreateTenantResult,
   DailySummaryView,
+  DemoPosView,
   ExchangeRateView,
   FeeReportView,
   PaymentView,
@@ -106,7 +107,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 const t = (tenantId: string) => `/tenants/${tenantId}`;
 
 export const api = {
-  login: (email: string, password: string) => request<SessionView>("POST", "/auth/login", { email, password }),
+  login: (login: string, password: string) => request<SessionView>("POST", "/auth/login", { login, password }),
   logout: () => request<void>("POST", "/auth/logout"),
   me: () => request<MeView>("GET", "/auth/me"),
   invite: (inviteToken: string) => request<InviteInfoView>("GET", `/auth/invites/${encodeURIComponent(inviteToken)}`),
@@ -159,10 +160,19 @@ export const api = {
     request<StaffMemberView>("PATCH", `${t(tenantId)}/staff/${userId}`, { role }),
   removeStaff: (tenantId: string, userId: string) => request<void>("DELETE", `${t(tenantId)}/staff/${userId}`),
 
+  demoPos: (tenantId: string) => request<DemoPosView>("GET", `${t(tenantId)}/demo-pos`),
+  demoPosAddLine: (tenantId: string, tableId: string, menuItemId: string) =>
+    request<DemoPosView>("POST", `${t(tenantId)}/demo-pos/tables/${tableId}/lines`, { menuItemId }),
+  demoPosRemoveLine: (tenantId: string, tableId: string, lineId: string) =>
+    request<DemoPosView>("DELETE", `${t(tenantId)}/demo-pos/tables/${tableId}/lines/${lineId}`),
+  demoPosClose: (tenantId: string, tableId: string) =>
+    request<DemoPosView>("POST", `${t(tenantId)}/demo-pos/tables/${tableId}/close`),
+  demoPosReset: (tenantId: string) => request<DemoPosView>("POST", `${t(tenantId)}/demo-pos/reset`),
+
   platformTenants: () => request<PlatformTenantView[]>("GET", "/platform/tenants"),
   platformFees: (month: string) => request<FeeReportView>("GET", `/platform/fees?month=${month}`),
   createTenant: (body: CreateTenantRequest) => request<CreateTenantResult>("POST", "/platform/tenants", body),
   updateTenant: (tenantId: string, body: UpdatePlatformTenantRequest) =>
     request<PlatformTenantView>("PATCH", `/platform/tenants/${tenantId}`, body),
-  passwordLink: (email: string) => request<InviteLinkView>("POST", "/platform/password-links", { email }),
+  passwordLink: (login: string) => request<InviteLinkView>("POST", "/platform/password-links", { login }),
 };

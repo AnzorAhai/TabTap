@@ -39,7 +39,7 @@ describe("offline payment methods", () => {
     const reported = await proof(payment.id, { reference: "ZL-77812", payerName: "Ana Pérez" }).expect(200);
     expect(reported.body.proofSubmitted).toBe(true);
 
-    const waiter = await t.signIn({ email: "waiter@demo.test", role: "waiter" });
+    const waiter = await t.signIn({ login: "waiter@demo.test", role: "waiter" });
     const list = await t.http().get(`/tenants/${DEMO_TENANT_ID}/payments`).set(bearer(waiter)).expect(200);
     expect(list.body[0]).toMatchObject({
       method: "zelle",
@@ -88,7 +88,7 @@ describe("offline payment methods", () => {
     expect(cash).toMatchObject({ flow: "staff", surchargeMinor: basisPointsOf(1638, 300) });
     await proof(cash.id, { reference: "123456" }).expect(400);
 
-    const manager = await t.signIn({ email: "manager@demo.test", role: "manager" });
+    const manager = await t.signIn({ login: "manager@demo.test", role: "manager" });
     const rejected = await t
       .http()
       .post(`/tenants/${DEMO_TENANT_ID}/payments/${cash.id}/reject`)
@@ -109,14 +109,14 @@ describe("offline payment methods", () => {
 
   it("doesn't let staff confirm card payments or other restaurants' payments", async () => {
     const card = await t.payOk(billId, { mode: "items", itemIds: [AREPA], method: "card" });
-    const owner = await t.signIn({ email: "owner@demo.test", role: "owner" });
+    const owner = await t.signIn({ login: "owner@demo.test", role: "owner" });
     await t.http().post(`/tenants/${DEMO_TENANT_ID}/payments/${card.id}/confirm`).set(bearer(owner)).expect(409);
 
     const zelle = await t.payOk(billId, { mode: "items", itemIds: ["t1-cachapa"], method: "zelle" });
     const { rows } = await t.db.query(
       `INSERT INTO tenants (name, country, default_currency) VALUES ('Other', 'VE', 'USD') RETURNING id`,
     );
-    const other = await t.signIn({ email: "owner@other.test", role: "owner", tenantId: rows[0].id });
+    const other = await t.signIn({ login: "owner@other.test", role: "owner", tenantId: rows[0].id });
     await t.http().post(`/tenants/${rows[0].id}/payments/${zelle.id}/confirm`).set(bearer(other)).expect(404);
   });
 });
@@ -127,8 +127,8 @@ describe("payment method settings", () => {
   afterEach(() => t.close());
 
   it("lets managers set methods and payee details, validating them", async () => {
-    const manager = await t.signIn({ email: "manager@demo.test", role: "manager" });
-    const waiter = await t.signIn({ email: "waiter@demo.test", role: "waiter" });
+    const manager = await t.signIn({ login: "manager@demo.test", role: "manager" });
+    const waiter = await t.signIn({ login: "waiter@demo.test", role: "waiter" });
     const url = `/tenants/${DEMO_TENANT_ID}/payment-methods`;
     const current = (await t.http().get(url).set(bearer(waiter)).expect(200)).body;
     expect(current).toHaveLength(6);
@@ -171,7 +171,7 @@ describe("payment method settings", () => {
     const billId = (await t.tableView()).bill.id;
     await t.payOk(billId, { mode: "items", itemIds: [AREPA], method: "card" });
     await t.payOk(billId, { mode: "items", itemIds: ["t1-cachapa"], method: "card" });
-    const owner = await t.signIn({ email: "owner@demo.test", role: "owner" });
+    const owner = await t.signIn({ login: "owner@demo.test", role: "owner" });
     const month = new Date().toISOString().slice(0, 7);
 
     const fees = await t.http().get(`/tenants/${DEMO_TENANT_ID}/fees?month=${month}`).set(bearer(owner)).expect(200);
@@ -180,7 +180,7 @@ describe("payment method settings", () => {
       rows: [
         {
           tenantId: DEMO_TENANT_ID,
-          tenantName: "Demo Restaurant",
+          tenantName: "El Araguaney",
           currency: "USD",
           payments: 2,
           billAmountMinor: 1638 + 1008,
@@ -190,7 +190,7 @@ describe("payment method settings", () => {
     });
     await t.http().get(`/tenants/${DEMO_TENANT_ID}/fees?month=2026-13`).set(bearer(owner)).expect(400);
     await t.http().get(`/platform/fees?month=${month}`).set(bearer(owner)).expect(403);
-    const admin = await t.signIn({ email: "ops@tabtap.test", platformAdmin: true });
+    const admin = await t.signIn({ login: "ops@tabtap.test", platformAdmin: true });
     expect((await t.http().get(`/platform/fees?month=${month}`).set(bearer(admin)).expect(200)).body.rows).toHaveLength(
       1,
     );

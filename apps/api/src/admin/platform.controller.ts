@@ -1,25 +1,14 @@
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from "@nestjs/common";
-import type {
-  CreateTenantRequest,
-  CreateTenantResult,
-  FeeReportView,
-  InviteLinkView,
-  PlatformTenantView,
-  UpdatePlatformTenantRequest,
-} from "@tabtap/shared";
 import {
-  IsEmail,
-  IsIn,
-  IsInt,
-  IsOptional,
-  IsString,
-  Length,
-  Matches,
-  Max,
-  MaxLength,
-  Min,
-  Validate,
-} from "class-validator";
+  LOGIN_PATTERN,
+  type CreateTenantRequest,
+  type CreateTenantResult,
+  type FeeReportView,
+  type InviteLinkView,
+  type PlatformTenantView,
+  type UpdatePlatformTenantRequest,
+} from "@tabtap/shared";
+import { IsIn, IsInt, IsOptional, IsString, Length, Matches, Max, MaxLength, Min, Validate } from "class-validator";
 import type { AuthContext } from "../auth/auth.service";
 import { CurrentAuth, PlatformAdmin } from "../auth/staff.guard";
 import { currentMonth } from "./months";
@@ -45,9 +34,8 @@ export class CreateTenantDto implements CreateTenantRequest {
   @Validate(IsTimeZone)
   timezone!: string;
 
-  @IsEmail()
-  @MaxLength(254)
-  ownerEmail!: string;
+  @Matches(LOGIN_PATTERN, { message: "login must be 3-254 letters, digits or . _ - @" })
+  ownerLogin!: string;
 }
 
 export class UpdatePlatformTenantDto implements UpdatePlatformTenantRequest {
@@ -64,9 +52,9 @@ export class UpdatePlatformTenantDto implements UpdatePlatformTenantRequest {
 }
 
 export class PasswordLinkDto {
-  @IsEmail()
+  @IsString()
   @MaxLength(254)
-  email!: string;
+  login!: string;
 }
 
 /** TabTap staff only. */
@@ -103,6 +91,6 @@ export class PlatformController {
   @Post("password-links")
   @HttpCode(200)
   passwordLink(@CurrentAuth() auth: AuthContext, @Body() dto: PasswordLinkDto): Promise<InviteLinkView> {
-    return this.platform.passwordLink(dto.email, auth.userId);
+    return this.platform.passwordLink(dto.login, auth.userId);
   }
 }

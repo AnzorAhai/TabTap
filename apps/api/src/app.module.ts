@@ -10,6 +10,7 @@ import { APP_CONFIG, AppConfig } from "./config/app-config";
 import { ConfigModule } from "./config/config.module";
 import { DataModule } from "./data/data.module";
 import { DatabaseModule } from "./database/database.module";
+import { DemoPosModule } from "./demo-pos/demo-pos.module";
 import { HealthController } from "./health/health.controller";
 import { PaymentsModule } from "./payments/payments.module";
 
@@ -29,6 +30,7 @@ import { PaymentsModule } from "./payments/payments.module";
     BillsModule,
     PaymentsModule,
     AdminModule,
+    DemoPosModule,
   ],
   controllers: [HealthController],
   providers: [

@@ -2,7 +2,7 @@ import { Inject, Injectable, NotFoundException } from "@nestjs/common";
 import type { CreateTenantResult, FeeReportView, InviteLinkView, PlatformTenantView } from "@tabtap/shared";
 import { monthRange } from "./months";
 import { Pool } from "pg";
-import { AuthService, normalizeEmail } from "../auth/auth.service";
+import { AuthService, normalizeLogin } from "../auth/auth.service";
 import { PaymentMethodsRepository } from "../data/payment-methods.repository";
 import { PaymentsRepository } from "../data/payments.repository";
 import { TenantsRepository, toPlatformView } from "../data/tenants.repository";
@@ -41,10 +41,10 @@ export class PlatformService {
       defaultCurrency: string;
       venueName: string;
       timezone: string;
-      ownerEmail: string;
+      ownerLogin: string;
     },
   ): Promise<CreateTenantResult> {
-    const ownerEmail = normalizeEmail(input.ownerEmail);
+    const ownerLogin = normalizeLogin(input.ownerLogin);
     return withTransaction(this.pool, async (db) => {
       const tenant = await this.tenants.create(db, {
         name: input.name.trim(),
@@ -64,10 +64,10 @@ export class PlatformService {
         details: {},
         sortOrder: 1,
       });
-      const owner = await this.users.findOrCreate(db, ownerEmail, "");
+      const owner = await this.users.findOrCreate(db, ownerLogin, "");
       await this.users.addMembership(db, owner.id, tenant.id, "owner");
       const ownerInvite = owner.passwordHash ? null : await this.auth.createInviteLink(db, owner, createdBy, "invite");
-      return { tenant: toPlatformView(tenant, [ownerEmail]), ownerInvite };
+      return { tenant: toPlatformView(tenant, [ownerLogin]), ownerInvite };
     });
   }
 
@@ -80,9 +80,9 @@ export class PlatformService {
   }
 
   /** Password reset for anyone (e.g. an owner who forgot theirs) — platform support only. */
-  async passwordLink(email: string, requestedBy: string): Promise<InviteLinkView> {
-    const user = await this.users.findByEmail(normalizeEmail(email));
-    if (!user) throw new NotFoundException("No account with this email");
+  async passwordLink(login: string, requestedBy: string): Promise<InviteLinkView> {
+    const user = await this.users.findByLogin(normalizeLogin(login));
+    if (!user) throw new NotFoundException("No account with this login");
     return this.auth.createInviteLink(this.pool, user, requestedBy);
   }
 }

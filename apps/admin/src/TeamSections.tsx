@@ -1,4 +1,4 @@
-import type { InviteLinkView, PlatformTenantView, StaffRole } from "@tabtap/shared";
+import { LOGIN_PATTERN, type InviteLinkView, type PlatformTenantView, type StaffRole } from "@tabtap/shared";
 import { useCallback, useState, type FormEvent } from "react";
 import { api } from "./api";
 import { useI18n } from "./i18n";
@@ -11,7 +11,7 @@ export function StaffSection({ tenantId, role, myUserId }: { tenantId: string; r
   const staff = useLoad(load);
   const action = useAction();
   const dialogs = useDialogs();
-  const [email, setEmail] = useState("");
+  const [login, setLogin] = useState("");
   const [name, setName] = useState("");
   const [newRole, setNewRole] = useState<StaffRole>("waiter");
   const [link, setLink] = useState<InviteLinkView | null>(null);
@@ -21,17 +21,17 @@ export function StaffSection({ tenantId, role, myUserId }: { tenantId: string; r
   function invite(e: FormEvent) {
     e.preventDefault();
     void action.run(async () => {
-      const result = await api.inviteStaff(tenantId, { email, name, role: newRole });
+      const result = await api.inviteStaff(tenantId, { login, name, role: newRole });
       setLink(result.inviteLink);
-      setNotice(result.inviteLink ? null : t.alreadyHasAccount(result.member.email));
-      setEmail("");
+      setNotice(result.inviteLink ? null : t.alreadyHasAccount(result.member.login));
+      setLogin("");
       setName("");
       staff.reload();
     });
   }
 
-  async function remove(userId: string, memberEmail: string) {
-    const ok = await dialogs.confirm({ title: t.removeTitle(memberEmail), confirmLabel: t.remove, danger: true });
+  async function remove(userId: string, memberLogin: string) {
+    const ok = await dialogs.confirm({ title: t.removeTitle(memberLogin), confirmLabel: t.remove, danger: true });
     if (!ok) return;
     void action.run(async () => {
       await api.removeStaff(tenantId, userId);
@@ -48,7 +48,7 @@ export function StaffSection({ tenantId, role, myUserId }: { tenantId: string; r
           <table className="data-table">
             <thead>
               <tr>
-                <th>{t.colEmail}</th>
+                <th>{t.colLogin}</th>
                 <th>{t.colName}</th>
                 <th>{t.colRole}</th>
                 <th>{t.colStatus}</th>
@@ -61,7 +61,7 @@ export function StaffSection({ tenantId, role, myUserId }: { tenantId: string; r
                 const manageable = role === "owner" || (role === "manager" && m.role === "waiter");
                 return (
                   <tr key={m.userId}>
-                    <td>{m.email}</td>
+                    <td>{m.login}</td>
                     <td>{m.name || "—"}</td>
                     <td>
                       {role === "owner" ? (
@@ -101,7 +101,7 @@ export function StaffSection({ tenantId, role, myUserId }: { tenantId: string; r
                         </button>
                       )}
                       {manageable && m.userId !== myUserId && (
-                        <button type="button" className="link danger" onClick={() => void remove(m.userId, m.email)}>
+                        <button type="button" className="link danger" onClick={() => void remove(m.userId, m.login)}>
                           {t.remove}
                         </button>
                       )}
@@ -116,12 +116,14 @@ export function StaffSection({ tenantId, role, myUserId }: { tenantId: string; r
         <h2>{t.inviteTitle}</h2>
         <form className="form-row" onSubmit={invite}>
           <input
-            type="email"
-            placeholder={t.email}
-            aria-label={t.email}
+            pattern={LOGIN_PATTERN.source}
+            title={t.loginHint}
+            autoCapitalize="none"
+            placeholder={t.login}
+            aria-label={t.login}
             required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            value={login}
+            onChange={(e) => setLogin(e.target.value)}
           />
           <input
             placeholder={t.namePlaceholder}
@@ -158,9 +160,9 @@ export function PlatformSection({ onTenantsChanged }: { onTenantsChanged: () => 
     defaultCurrency: "USD",
     venueName: "",
     timezone: "America/Caracas",
-    ownerEmail: "",
+    ownerLogin: "",
   });
-  const [resetEmail, setResetEmail] = useState("");
+  const [resetLogin, setResetLogin] = useState("");
   const [month, setMonth] = useState(currentMonth());
   const loadFees = useCallback(() => api.platformFees(month), [month]);
   const fees = useLoad(loadFees);
@@ -176,7 +178,7 @@ export function PlatformSection({ onTenantsChanged }: { onTenantsChanged: () => 
         defaultCurrency: form.defaultCurrency.toUpperCase(),
       });
       setLink(result.ownerInvite);
-      setForm((f) => ({ ...f, name: "", venueName: "", ownerEmail: "" }));
+      setForm((f) => ({ ...f, name: "", venueName: "", ownerLogin: "" }));
       tenants.reload();
       onTenantsChanged();
     });
@@ -238,7 +240,7 @@ export function PlatformSection({ onTenantsChanged }: { onTenantsChanged: () => 
                   <td>{tenant.name}</td>
                   <td>{tenant.country}</td>
                   <td>{tenant.defaultCurrency}</td>
-                  <td>{tenant.ownerEmails.join(", ") || "—"}</td>
+                  <td>{tenant.ownerLogins.join(", ") || "—"}</td>
                   <td>
                     <button type="button" className="link" onClick={() => void editFee(tenant)}>
                       {number(tenant.platformFeeBps / 100)}
@@ -305,12 +307,14 @@ export function PlatformSection({ onTenantsChanged }: { onTenantsChanged: () => 
             onChange={set("timezone")}
           />
           <input
-            type="email"
+            pattern={LOGIN_PATTERN.source}
+            title={t.loginHint}
+            autoCapitalize="none"
             placeholder={t.phOwner}
             aria-label={t.phOwner}
             required
-            value={form.ownerEmail}
-            onChange={set("ownerEmail")}
+            value={form.ownerLogin}
+            onChange={set("ownerLogin")}
           />
           <button disabled={action.busy}>{t.create}</button>
         </form>
@@ -322,16 +326,15 @@ export function PlatformSection({ onTenantsChanged }: { onTenantsChanged: () => 
           className="form-row"
           onSubmit={(e) => {
             e.preventDefault();
-            void action.run(async () => setLink(await api.passwordLink(resetEmail)));
+            void action.run(async () => setLink(await api.passwordLink(resetLogin)));
           }}
         >
           <input
-            type="email"
-            placeholder={t.email}
-            aria-label={t.email}
+            placeholder={t.login}
+            aria-label={t.login}
             required
-            value={resetEmail}
-            onChange={(e) => setResetEmail(e.target.value)}
+            value={resetLogin}
+            onChange={(e) => setResetLogin(e.target.value)}
           />
           <button className="ghost" disabled={action.busy}>
             {t.passwordLink}

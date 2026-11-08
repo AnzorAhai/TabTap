@@ -60,6 +60,20 @@ export class BillsRepository {
     return mapBill(rows[0]);
   }
 
+  async findByPosId(tableId: string, externalPosId: string, db: Queryable = this.pool): Promise<BillRecord | null> {
+    const { rows } = await db.query(`SELECT * FROM bills WHERE table_id = $1 AND external_pos_id = $2`, [
+      tableId,
+      externalPosId,
+    ]);
+    return rows.length ? mapBill(rows[0]) : null;
+  }
+
+  async markClosed(db: Queryable, billId: string): Promise<void> {
+    await db.query(`UPDATE bills SET pos_status = 'closed', status = 'closed', updated_at = now() WHERE id = $1`, [
+      billId,
+    ]);
+  }
+
   /** Locks the bill row until the transaction ends; every change to a bill's payments goes through this. */
   async lockById(db: Queryable, billId: string): Promise<BillRecord> {
     const { rows } = await db.query(`SELECT * FROM bills WHERE id = $1 FOR UPDATE`, [billId]);

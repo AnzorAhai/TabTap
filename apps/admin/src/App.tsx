@@ -5,6 +5,7 @@ import { InvitePage, LoginPage } from "./AuthPages";
 import { useI18n } from "./i18n";
 import { FeesSection, PaymentMethodsSection } from "./PaymentSettings";
 import { PaymentsPage } from "./PaymentsPage";
+import { PosPage } from "./PosPage";
 import { RatesSection, SettingsSection } from "./RestaurantSettings";
 import { TablesPage } from "./TablesPage";
 import { PlatformSection, StaffSection } from "./TeamSections";
@@ -12,7 +13,7 @@ import { TodayPage } from "./TodayPage";
 import { ErrorText, LanguagePicker, Logo } from "./ui";
 
 const TENANT_KEY = "tabtap.admin.tenant";
-type Page = "today" | "tables" | "payments" | "methods" | "rates" | "fees" | "settings" | "staff" | "platform";
+type Page = "today" | "pos" | "tables" | "payments" | "methods" | "rates" | "fees" | "settings" | "staff" | "platform";
 
 function storedTenant(): string | null {
   try {
@@ -121,6 +122,7 @@ function Dashboard({ me, onSignOut }: { me: MeView; onSignOut: () => void }) {
   const managing = role === "owner" || role === "manager";
   const pages: Page[] = [
     "today",
+    ...(settings?.demoPos ? (["pos"] as Page[]) : []),
     "tables",
     "payments",
     "methods",
@@ -171,7 +173,7 @@ function Dashboard({ me, onSignOut }: { me: MeView; onSignOut: () => void }) {
         <div className="sidebar-foot">
           <LanguagePicker />
           <div className="muted small user-line">
-            {me.email}
+            {me.login}
             {role && ` · ${t.role[role]}`}
             {me.isPlatformAdmin && ` · ${t.platformBadge}`}
           </div>
@@ -187,6 +189,7 @@ function Dashboard({ me, onSignOut }: { me: MeView; onSignOut: () => void }) {
         {tenantId && settings && role && (
           <>
             {page === "today" && <TodayPage tenantId={tenantId} role={role} />}
+            {page === "pos" && settings.demoPos && <PosPage tenantId={tenantId} role={role} />}
             {page === "tables" && <TablesPage tenantId={tenantId} role={role} restaurantName={settings.name} />}
             {page === "payments" && <PaymentsPage tenantId={tenantId} role={role} />}
             {page === "methods" && <PaymentMethodsSection tenantId={tenantId} role={role} />}

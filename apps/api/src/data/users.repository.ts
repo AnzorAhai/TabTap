@@ -6,7 +6,7 @@ import type { Queryable } from "../database/transaction";
 
 export interface UserRecord {
   id: string;
-  email: string;
+  login: string;
   name: string;
   passwordHash: string | null;
   isPlatformAdmin: boolean;
@@ -23,18 +23,18 @@ export class UsersRepository {
     return rows.length ? mapUser(rows[0]) : null;
   }
 
-  async findByEmail(email: string, db: Queryable = this.pool): Promise<UserRecord | null> {
-    const { rows } = await db.query(`SELECT * FROM users WHERE email = $1`, [email]);
+  async findByLogin(login: string, db: Queryable = this.pool): Promise<UserRecord | null> {
+    const { rows } = await db.query(`SELECT * FROM users WHERE login = $1`, [login]);
     return rows.length ? mapUser(rows[0]) : null;
   }
 
-  /** Returns the user with this email, creating a password-less one if there is none. */
-  async findOrCreate(db: Queryable, email: string, name: string): Promise<UserRecord> {
+  /** Returns the user with this login, creating a password-less one if there is none. */
+  async findOrCreate(db: Queryable, login: string, name: string): Promise<UserRecord> {
     const { rows } = await db.query(
-      `INSERT INTO users (email, name) VALUES ($1, $2)
-       ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
+      `INSERT INTO users (login, name) VALUES ($1, $2)
+       ON CONFLICT (login) DO UPDATE SET login = EXCLUDED.login
        RETURNING *`,
-      [email, name],
+      [login, name],
     );
     return mapUser(rows[0]);
   }
@@ -96,15 +96,15 @@ export class UsersRepository {
 
   async listStaff(tenantId: string, db: Queryable = this.pool): Promise<StaffMemberView[]> {
     const { rows } = await db.query(
-      `SELECT u.id, u.email, u.name, u.password_hash IS NOT NULL AS has_password, u.is_active, u.last_login_at, m.role
+      `SELECT u.id, u.login, u.name, u.password_hash IS NOT NULL AS has_password, u.is_active, u.last_login_at, m.role
        FROM memberships m JOIN users u ON u.id = m.user_id
        WHERE m.tenant_id = $1
-       ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'manager' THEN 1 ELSE 2 END, u.email`,
+       ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'manager' THEN 1 ELSE 2 END, u.login`,
       [tenantId],
     );
     return rows.map((r) => ({
       userId: r.id,
-      email: r.email,
+      login: r.login,
       name: r.name,
       role: r.role as StaffRole,
       status: !r.is_active ? "disabled" : r.has_password ? "active" : "invited",
@@ -116,7 +116,7 @@ export class UsersRepository {
 function mapUser(row: Record<string, unknown>): UserRecord {
   return {
     id: row.id as string,
-    email: row.email as string,
+    login: row.login as string,
     name: row.name as string,
     passwordHash: (row.password_hash as string | null) ?? null,
     isPlatformAdmin: row.is_platform_admin as boolean,

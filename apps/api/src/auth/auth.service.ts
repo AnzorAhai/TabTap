@@ -31,10 +31,10 @@ export interface RequestMeta {
 const INVITE_TTL_HOURS = 72;
 /** Don't write last_used_at on every request. */
 const TOUCH_INTERVAL_MS = 5 * 60_000;
-const INVALID_LOGIN = "Invalid email or password";
+const INVALID_LOGIN = "Invalid login or password";
 
-export function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase();
+export function normalizeLogin(login: string): string {
+  return login.trim().toLowerCase();
 }
 
 @Injectable()
@@ -46,8 +46,8 @@ export class AuthService {
     private readonly sessions: SessionsRepository,
   ) {}
 
-  async login(email: string, password: string, meta: RequestMeta): Promise<SessionView> {
-    const user = await this.users.findByEmail(normalizeEmail(email));
+  async login(login: string, password: string, meta: RequestMeta): Promise<SessionView> {
+    const user = await this.users.findByLogin(normalizeLogin(login));
     if (!user || !user.passwordHash || !user.isActive) {
       await burnPasswordCheck(password);
       throw new UnauthorizedException(INVALID_LOGIN);
@@ -76,7 +76,7 @@ export class AuthService {
     if (!user) throw new UnauthorizedException();
     return {
       userId: user.id,
-      email: user.email,
+      login: user.login,
       name: user.name,
       isPlatformAdmin: user.isPlatformAdmin,
       memberships: await this.users.listMemberships(user.id),
@@ -95,7 +95,7 @@ export class AuthService {
     await this.sessions.createInvite(db, user.id, hash, purpose, expiresAt, createdBy);
     return {
       userId: user.id,
-      email: user.email,
+      login: user.login,
       url: `${this.config.adminAppUrl}/invite/${token}`,
       expiresAt: expiresAt.toISOString(),
     };
@@ -108,7 +108,7 @@ export class AuthService {
     }
     const user = await this.users.findById(invite.userId);
     if (!user || !user.isActive) throw new GoneException("This link is no longer valid.");
-    return { email: user.email, name: user.name, purpose: invite.purpose, expiresAt: invite.expiresAt.toISOString() };
+    return { login: user.login, name: user.name, purpose: invite.purpose, expiresAt: invite.expiresAt.toISOString() };
   }
 
   /** Sets the password from an invite / reset link and signs the user in. */

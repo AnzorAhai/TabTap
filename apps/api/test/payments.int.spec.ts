@@ -24,7 +24,7 @@ describe("bill view", () => {
     const view = await t.tableView();
 
     expect(view.bill).toMatchObject({
-      tableLabel: "Table 1",
+      tableLabel: "Mesa 1",
       currency: "USD",
       status: "open",
       subtotalMinor: 3400,
@@ -106,7 +106,7 @@ describe("paying (instant mock gateway)", () => {
 
     const receipt = await t.http().get(`/payments/${payment.id}/receipt`).expect(200);
     expect(receipt.body).toMatchObject({
-      tableLabel: "Table 1",
+      tableLabel: "Mesa 1",
       mode: "items",
       items: [{ name: "Arepa reina pepiada", quantity: 2, lineTotalMinor: AREPA_TOTAL }],
       amountMinor: AREPA_TOTAL,
@@ -163,7 +163,7 @@ describe("paying (instant mock gateway)", () => {
   });
 
   it("pays in bolívares by Pago Móvil at the restaurant's rate; the fee stays on the USD amount", async () => {
-    const owner = await t.signIn({ email: "owner@demo.test", role: "owner" });
+    const owner = await t.signIn({ login: "owner@demo.test", role: "owner" });
     await t
       .http()
       .post(`/tenants/${DEMO_TENANT_ID}/exchange-rates`)
@@ -363,8 +363,8 @@ describe("exchange rates in the admin panel", () => {
   it("lets owners and managers set the rate, not waiters or anonymous callers", async () => {
     const url = `/tenants/${DEMO_TENANT_ID}/exchange-rates`;
     const body = { baseCurrency: "USD", quoteCurrency: "VES", rate: "250" };
-    const waiter = await t.signIn({ email: "waiter@demo.test", role: "waiter" });
-    const manager = await t.signIn({ email: "manager@demo.test", role: "manager" });
+    const waiter = await t.signIn({ login: "waiter@demo.test", role: "waiter" });
+    const manager = await t.signIn({ login: "manager@demo.test", role: "manager" });
 
     await t.http().post(url).send(body).expect(401);
     await t.http().post(url).set("Authorization", `Bearer ${waiter.token}`).send(body).expect(403);

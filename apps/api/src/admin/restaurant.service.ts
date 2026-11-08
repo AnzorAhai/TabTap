@@ -32,7 +32,7 @@ export class RestaurantService {
   ) {}
 
   async settings(tenantId: string, role: StaffRole): Promise<TenantSettingsView> {
-    return toSettingsView(await this.tenants.findById(tenantId), role);
+    return this.toSettings(await this.tenants.findById(tenantId), role);
   }
 
   async updateSettings(
@@ -47,7 +47,7 @@ export class RestaurantService {
       tipPercentOptions,
       rateSource: changes.rateSource,
     });
-    return toSettingsView(updated, role);
+    return this.toSettings(updated, role);
   }
 
   listVenues(tenantId: string): Promise<VenueView[]> {
@@ -121,6 +121,21 @@ export class RestaurantService {
     return toRateView(await this.rates.insert(tenantId, base, quote, rate, "manual"));
   }
 
+  private toSettings(t: TenantRecord, role: StaffRole): TenantSettingsView {
+    return {
+      id: t.id,
+      name: t.name,
+      country: t.country,
+      defaultCurrency: t.defaultCurrency,
+      status: t.status,
+      platformFeeBps: t.platformFeeBps,
+      tipPercentOptions: t.tipPercentOptions,
+      rateSource: t.rateSource,
+      role,
+      demoPos: t.isDemo && this.config.posConnectorType === "demo",
+    };
+  }
+
   /** Days are counted in the restaurant's first venue's time zone. */
   private async timeZone(tenantId: string): Promise<string> {
     return (await this.tenants.listVenues(tenantId))[0]?.timezone ?? "UTC";
@@ -137,20 +152,6 @@ export class RestaurantService {
       guestUrl: `${this.config.guestAppUrl}/?table=${encodeURIComponent(t.qrToken)}`,
     };
   }
-}
-
-function toSettingsView(t: TenantRecord, role: StaffRole): TenantSettingsView {
-  return {
-    id: t.id,
-    name: t.name,
-    country: t.country,
-    defaultCurrency: t.defaultCurrency,
-    status: t.status,
-    platformFeeBps: t.platformFeeBps,
-    tipPercentOptions: t.tipPercentOptions,
-    rateSource: t.rateSource,
-    role,
-  };
 }
 
 function toRateView(r: ExchangeRateRecord): ExchangeRateView {

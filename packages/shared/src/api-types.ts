@@ -321,6 +321,9 @@ export interface SetExchangeRateRequest {
 
 export type StaffRole = "owner" | "manager" | "waiter";
 
+/** What a staff login may look like. Stored in lower case; an email address is a valid login. */
+export const LOGIN_PATTERN = /^[A-Za-z0-9._\-@]{3,254}$/;
+
 export interface MembershipView {
   tenantId: string;
   tenantName: string;
@@ -329,7 +332,7 @@ export interface MembershipView {
 
 export interface MeView {
   userId: string;
-  email: string;
+  login: string;
   name: string;
   /** TabTap staff: may manage every restaurant and the platform settings. */
   isPlatformAdmin: boolean;
@@ -345,13 +348,13 @@ export interface SessionView {
 
 /** POST /auth/login */
 export interface LoginRequest {
-  email: string;
+  login: string;
   password: string;
 }
 
 /** GET /auth/invites/:token — what the set-password page shows. */
 export interface InviteInfoView {
-  email: string;
+  login: string;
   name: string;
   purpose: "invite" | "password_reset";
   expiresAt: string;
@@ -366,7 +369,7 @@ export interface AcceptInviteRequest {
 /** A one-time link that lets someone set their password. Shown once; pass it on yourself. */
 export interface InviteLinkView {
   userId: string;
-  email: string;
+  login: string;
   url: string;
   expiresAt: string;
 }
@@ -383,6 +386,8 @@ export interface TenantSettingsView {
   rateSource: "manual" | "bcv";
   /** The caller's role here; platform admins act as owners. */
   role: StaffRole;
+  /** This restaurant runs on the demo POS: the panel shows the waiter's screen. */
+  demoPos: boolean;
 }
 
 /** PATCH /tenants/:tenantId/settings */
@@ -408,7 +413,7 @@ export interface VenueRequest {
 
 export interface StaffMemberView {
   userId: string;
-  email: string;
+  login: string;
   name: string;
   role: StaffRole;
   /** invited = hasn't set a password yet. */
@@ -418,7 +423,7 @@ export interface StaffMemberView {
 
 /** POST /tenants/:tenantId/staff */
 export interface InviteStaffRequest {
-  email: string;
+  login: string;
   role: StaffRole;
   name?: string;
 }
@@ -436,7 +441,7 @@ export interface PlatformTenantView {
   defaultCurrency: string;
   status: "active" | "suspended";
   platformFeeBps: number;
-  ownerEmails: string[];
+  ownerLogins: string[];
   createdAt: string;
 }
 
@@ -450,7 +455,7 @@ export interface CreateTenantRequest {
   venueName: string;
   /** IANA time zone, e.g. "America/Caracas". */
   timezone: string;
-  ownerEmail: string;
+  ownerLogin: string;
 }
 
 export interface CreateTenantResult {
@@ -462,4 +467,64 @@ export interface CreateTenantResult {
 export interface UpdatePlatformTenantRequest {
   platformFeeBps?: number;
   status?: "active" | "suspended";
+}
+
+// ---------------------------------------------------------------------------
+// Demo POS (investor demos): the waiter's screen.
+
+export interface DemoMenuItemView {
+  id: string;
+  category: string;
+  name: string;
+  /** Before IVA and service. */
+  priceMinor: number;
+}
+
+export interface DemoPosOrderView {
+  id: string;
+  billId: string;
+  openedAt: string;
+  status: BillStatus;
+  lines: { id: string; name: string; priceMinor: number; state: ClaimState }[];
+  subtotalMinor: number;
+  taxMinor: number;
+  serviceChargeMinor: number;
+  totalMinor: number;
+  paidMinor: number;
+  reservedMinor: number;
+  remainingMinor: number;
+  /** Tips on settled payments. */
+  tipMinor: number;
+  /** Settled and in progress, newest first. */
+  payments: {
+    id: string;
+    status: PaymentStatus;
+    method: PaymentMethod;
+    amountMinor: number;
+    tipMinor: number;
+    chargeAmountMinor: number;
+    chargeCurrency: string;
+  }[];
+}
+
+export interface DemoPosTableView {
+  tableId: string;
+  label: string;
+  guestUrl: string;
+  order: DemoPosOrderView | null;
+}
+
+/** GET /tenants/:tenantId/demo-pos */
+export interface DemoPosView {
+  /** Currency of menu prices and bills. */
+  currency: string;
+  /** Current rate from `currency`, for showing prices in bolívares. */
+  rate: { currency: string; value: string } | null;
+  menu: DemoMenuItemView[];
+  tables: DemoPosTableView[];
+}
+
+/** POST /tenants/:tenantId/demo-pos/tables/:tableId/lines */
+export interface AddDemoLineRequest {
+  menuItemId: string;
 }
