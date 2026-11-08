@@ -26,9 +26,10 @@ services:
       # Guest app base URL, used for the table QR links shown in the admin panel.
       - key: GUEST_APP_URL
         sync: false
-      # Admin panel URL, used in staff invite links, e.g. https://tab-tap-admin.vercel.app
+      # Admin panel URL, used in staff invite links. Not a secret, so it lives here and
+      # Blueprint syncs apply it (sync: false values would have to be set by hand).
       - key: ADMIN_APP_URL
-        sync: false
+        value: https://tab-tap-admin.vercel.app
       - key: POS_CONNECTOR_TYPE
         value: mock
       - key: PAYMENT_PROVIDER_TYPE

@@ -129,7 +129,8 @@ Environment variables to set in the Render dashboard:
 - `CORS_ORIGINS` — the two Vercel origins, comma-separated. **Required**: the API refuses to start
   in production without it.
 - `GUEST_APP_URL` — the guest app's URL, used for the QR links in the admin panel.
-- `ADMIN_APP_URL` — the admin panel's URL, used in invite links. **Required** in production.
+- `ADMIN_APP_URL` — the admin panel's URL, used in invite links. **Required** in production; set
+  in `render.yaml` (it isn't secret), so the Blueprint applies it.
 
 All variables are described in `apps/api/.env.example`.
 
